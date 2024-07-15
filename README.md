@@ -2,29 +2,33 @@
 
 Terraform code for creating local and cloud infrastructure where applications are deployed.
 
-## Setup
+## Prerequisites
+
+* [kubectl](https://kubernetes.io/docs/tasks/tools/)
+* [lima](https://github.com/lima-vm/lima)
+* [terraform](https://developer.hashicorp.com/terraform/install)
+* [terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/)
+* [yq](https://mikefarah.gitbook.io/yq)
+* A mail server configured with a domain. The email address used for Prometheus monitoring is set in [terragrunt/config/globals.hcl].
+
+## Usage
 
 ### Local Development
 
 > [!IMPORTANT]
 > Only ARM architecture is supported at this time.
 
-1. Install [Lima](https://github.com/lima-vm/lima).
-1. Create a virtual machine (VM) based on the lima template in [lima/kubernetes.yaml].
+1. Create a local virtual machine (VM) for Kubernetes.
     ```
     K8S_VERSION='1.30'
     VM_NAME='k8s'
 
     limactl create https://raw.githubusercontent.com/lima-vm/lima/v0.22.0/examples/k8s.yaml \
-        --arch aarch64 \
         --cpus 2 \
-        --disk 20 \
-        --memory 4 \
+        --disk 20GiB \
+        --memory 4GiB \
         --name "${VM_NAME}" \
-        --network vzNAT \
-        --set ".provision = (.provision | map(to_entries | map({ \"key\": .key, \"value\": (.value | sub(\"VERSION=.*\"; \"VERSION=${K8S_VERSION}\")) }) | from_entries))" \
-        --tty=false \
-        --vm-type vz
+        --set ".provision = (.provision | map(to_entries | map({ \"key\": .key, \"value\": (.value | sub(\"VERSION=.*\"; \"VERSION=${K8S_VERSION}\")) }) | from_entries))"
 1. Start the VM.
     ```
     limactl start "${VM_NAME}"
