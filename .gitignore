@@ -33,5 +33,5 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Terragrunt-generated files
-terragrunt-generated-*.tf
+# MacOS files
+.DS_Store

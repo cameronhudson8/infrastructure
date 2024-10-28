@@ -1,20 +1,6 @@
-variable "email_sender" {
-  description = "Details of the email account from which monitoring alerts are sent"
-  type = object({
-    address   = string
-    transport = string
-  })
-}
-
-variable "email_sender_auth_username" {
-  description = "The username of the email account from which monitoring alerts are sent"
-  type        = string
-}
-
-variable "email_sender_auth_password" {
-  description = "The password of the email account from which monitoring alerts are sent"
-  sensitive   = true
-  type        = string
+variable "alertmanager_replicas" {
+  description = "The number of Alertmanager replicas"
+  type        = number
 }
 
 variable "email_recipient_address" {
