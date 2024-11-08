@@ -1,5 +1,20 @@
-variable "metrics_server_version" {
-  description = "The version of the Metrics Server to install"
+variable "kubernetes_client_certificate" {
+  description = "The client certificate for authentication with the Kubernetes API server"
+  type        = string
+}
+
+variable "kubernetes_client_key" {
+  description = "The client certificate for authentication with the Kubernetes API server"
+  type        = string
+}
+
+variable "kubernetes_cluster_ca_certificate" {
+  description = "The cluster CA certificate for TLS connection to the Kubernetes API server"
+  type        = string
+}
+
+variable "kubernetes_server" {
+  description = "The base URI of the Kubernetes API server"
   type        = string
 }
 

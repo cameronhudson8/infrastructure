@@ -1,14 +1,3 @@
-resource "kubernetes_secret" "email_sender_creds" {
-  metadata {
-    name      = "monitoring-email-sender-creds"
-    namespace = var.namespace_name
-  }
-  data = {
-    password = var.email_sender_auth_password
-    username = var.email_sender_auth_username
-  }
-}
-
 locals {
   alertmanager_global_config_name = "global"
   alertmanager_config_name        = "main"
@@ -62,11 +51,39 @@ data "external" "kube_prometheus_prepare_manifests" {
     "-o",
     "pipefail",
     "-c",
+    # This script is based on the kube-prometheus installation docs.
+    # https://github.com/prometheus-operator/kube-prometheus/blob/main/docs/customizing.md
     <<-EOF
-      path="$(mktemp)"
-      cat <<CONFIG >"$${path}"
+      REPO='github.com/prometheus-operator/kube-prometheus'
+      SUBDIR='jsonnet/kube-prometheus'
+      MANIFESTS_PATH="${path.module}/kube-prometheus/manifests"
+      MANIFESTS_SETUP_PATH="${path.module}/kube-prometheus/manifests/setup"
+
+      mkdir -p "${path.module}/kube-prometheus"
+      pushd "${path.module}/kube-prometheus" >/dev/null
+      # Create the initial/empty `jsonnetfile.json'.
+      if ! [ -f jsonnetfile.json ]; then
+        jb init
+      fi
+      installed_version=$(
+        jq -r \
+          "
+            .dependencies[] \
+            | select(.source.git.remote == \"https://$${REPO}.git\" and .source.git.subdir == \"$${SUBDIR}\")
+            | .version
+          " \
+          ./jsonnetfile.json
+      )
+      if [ "$${installed_version}" != '${var.kube_prometheus_version}' ]; then
+        # Install the kube-prometheus dependency.
+        # Creates `vendor/` and `jsonnetfile.lock.json`, and fills in `jsonnetfile.json`.
+        jb -q install "$${REPO}/$${SUBDIR}@${var.kube_prometheus_version}"
+      fi
+
+      kube_prometheus_config_path="$(mktemp)"
+      cat <<CONFIG >"$${kube_prometheus_config_path}"
       local kp =
-        (import 'kube-prometheus/main.libsonnet') +
+        (import 'kube-prometheus/main.libsonnet')
         // Uncomment the following imports to enable its patches
         // (import 'kube-prometheus/addons/anti-affinity.libsonnet') +
         // (import 'kube-prometheus/addons/managed-cluster.libsonnet') +
@@ -82,20 +99,20 @@ data "external" "kube_prometheus_prepare_manifests" {
                 // Send alerts through all routes and through all inhibition rules,
                 // regardless of the namespace from which the alert originated.
                 alertmanagerConfigMatcherStrategy+: {
-                  type: "None",
+                  type: 'None',
                 },
                 alertmanagerConfigNamespaceSelector+: {
                   // Look for AlertmanagerConfigs in all namespaces.
                   matchExpressions+: [
                     {
-                      key: "kubernetes.io/metadata.name",
-                      operator: "Exists",
+                      key: 'kubernetes.io/metadata.name',
+                      operator: 'Exists',
                     },
                   ],
                 },
                 alertmanagerConfigSelector+: {
                   matchLabels+: {
-                    name: "${local.alertmanager_config_name}",
+                    name: '${local.alertmanager_config_name}',
                   },
                 },
                 alertmanagerConfiguration+: {
@@ -103,13 +120,13 @@ data "external" "kube_prometheus_prepare_manifests" {
                     httpConfig+: {
                       followRedirects: true,
                     },
-                    resolveTimeout: "5m",
+                    resolveTimeout: '5m',
                     smtp+: {
-                      hello: "localhost",
+                      hello: 'localhost',
                       requireTLS: true,
                     },
                   },
-                  name: "${local.alertmanager_global_config_name}",
+                  name: '${local.alertmanager_global_config_name}',
                   templates+: [],
                 },
                 // The Prometheus Operator will merge this into the list of containers based on the container name.
@@ -192,13 +209,12 @@ data "external" "kube_prometheus_prepare_manifests" {
                     cpu: '167m',
                   },
                   requests+: {
-                    cpu: "4m",
+                    // VPA target recommendation
+                    cpu: '11m',
                   },
                 },
               },
             },
-          },
-          values+:: {
             common+: {
               namespace: '${var.namespace_name}',
             },
@@ -250,6 +266,7 @@ data "external" "kube_prometheus_prepare_manifests" {
             },
           },
         };
+
       { 'setup/0namespace-namespace': kp.kubePrometheus.namespace } +
       {
         ['setup/prometheus-operator-' + name]: kp.prometheusOperator[name]
@@ -270,62 +287,31 @@ data "external" "kube_prometheus_prepare_manifests" {
       { ['prometheus-' + name]: kp.prometheus[name] for name in std.objectFields(kp.prometheus) } +
       { ['prometheus-adapter-' + name]: kp.prometheusAdapter[name] for name in std.objectFields(kp.prometheusAdapter) }
       CONFIG
-      checksum=$(md5 -q "$${path}")
-      echo "{\"path\": \"$${path}\", \"checksum\": \"$${checksum}\"}"
-  EOF
-  ]
-}
 
-data "external" "kube_prometheus_prepare_manifests" {
-  program = [
-    "/usr/bin/env",
-    "bash",
-    "-eu",
-    "-o",
-    "pipefail",
-    "-c",
-    # This script is based on the kube-prometheus installation docs.
-    # https://github.com/prometheus-operator/kube-prometheus/blob/main/docs/customizing.md
-    <<-EOF
-      REPO='github.com/prometheus-operator/kube-prometheus'
-      SUBDIR='jsonnet/kube-prometheus'
-      mkdir -p "${path.module}/kube-prometheus"
-      pushd "${path.module}/kube-prometheus" >/dev/null
-      # Create the initial/empty `jsonnetfile.json'.
-      if ! [ -f jsonnetfile.json ]; then
-        jb init
-      fi
-      installed_version=$(
-        jq -r \
-          "
-            .dependencies[] \
-            | select(.source.git.remote == \"https://$${REPO}.git\" and .source.git.subdir == \"$${SUBDIR}\")
-            | .version
-          " \
-          ./jsonnetfile.json
-      )
-      if [ "$${installed_version}" != '${var.kube_prometheus_version}' ]; then
-        # Install the kube-prometheus dependency.
-        # Creates `vendor/` and `jsonnetfile.lock.json`, and fills in `jsonnetfile.json`.
-        jb -q install "$${REPO}/$${SUBDIR}@${var.kube_prometheus_version}"
-      fi
+      manifests_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_PATH}" -regex '.*\.ya?ml') | md5 -q)
+      manifests_setup_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_SETUP_PATH}" -regex '.*\.ya?ml') | md5 -q)
+
       curl 'https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/${var.kube_prometheus_version}/build.sh' \
           --fail-with-body \
           -LsS \
-          | sh -s "${data.external.kube_prometheus_config.result.path}"
-      echo '{}'
+          | sh -s "$${kube_prometheus_config_path}"
+      jq -cM '.' <<JSON
+          {
+              "manifests_checksum": "$${manifests_checksum}",
+              "manifests_path": "$${MANIFESTS_PATH}",
+              "manifests_setup_checksum": "$${manifests_setup_checksum}",
+              "manifests_setup_path": "$${MANIFESTS_SETUP_PATH}"
+          }
+      JSON
     EOF
   ]
 }
 
-resource "kubernetes_manifest" "kube_prometheus_setup_namespace" {
-  depends_on = [
-    data.external.kube_prometheus_prepare_manifests,
-  ]
+resource "kubernetes_manifest" "kube_prometheus_setup_namespaces" {
   for_each = {
     for manifest in [
       for _manifest in [
-        for file_path in fileset(path.module, "kube-prometheus/manifests/setup/*")
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*")
         : yamldecode(file("${path.module}/${file_path}"))
       ]
       : _manifest if contains(["Namespace"], _manifest.kind)
@@ -341,9 +327,24 @@ resource "kubernetes_manifest" "kube_prometheus_setup_namespace" {
   manifest = each.value
 }
 
+resource "kubernetes_secret" "email_sender_creds" {
+  depends_on = [
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
+  ]
+  metadata {
+    name      = "monitoring-email-sender-creds"
+    namespace = var.namespace_name
+  }
+  data = {
+    password = var.email_sender_auth_password
+    username = var.email_sender_auth_username
+  }
+}
+
+
 resource "kubernetes_manifest" "alertmanager_config_global" {
   depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespace,
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
   ]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
@@ -370,7 +371,7 @@ resource "kubernetes_manifest" "alertmanager_config_global" {
 
 resource "kubernetes_manifest" "alertmanager_config" {
   depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespace,
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
   ]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
@@ -492,14 +493,13 @@ resource "kubernetes_manifest" "alertmanager_config" {
 
 resource "kubernetes_manifest" "kube_prometheus_setup_remaining" {
   depends_on = [
-    data.external.kube_prometheus_prepare_manifests,
-    kubernetes_manifest.kube_prometheus_setup_namespace,
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
     kubernetes_manifest.alertmanager_config,
   ]
   for_each = {
     for manifest in [
       for _manifest in [
-        for file_path in fileset(path.module, "kube-prometheus/manifests/setup/*")
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*")
         : yamldecode(file("${path.module}/${file_path}"))
       ]
       : _manifest if !contains(["CustomResourceDefinition", "Namespace"], _manifest.kind)
@@ -517,15 +517,15 @@ resource "kubernetes_manifest" "kube_prometheus_setup_remaining" {
 
 resource "kubernetes_manifest" "kube_prometheus" {
   depends_on = [
-    data.external.kube_prometheus_prepare_manifests,
-    kubernetes_manifest.kube_prometheus_setup_namespace,
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
     kubernetes_manifest.kube_prometheus_setup_remaining,
   ]
   for_each = {
     for manifest in flatten([
       # Some of the files contain "List" aggregate resources that do not exist in the Kubernetes API. Split them.
       for _manifest in [
-        for file_path in fileset(path.module, "kube-prometheus/manifests/*") : yamldecode(file("${path.module}/${file_path}"))
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_path, path.module, "./")}/*")
+        : yamldecode(file("${path.module}/${file_path}"))
       ]
       # This is the most sensible way, but Terraform throws "Inconsistent conditional result types".
       # : (
@@ -558,4 +558,54 @@ resource "kubernetes_manifest" "kube_prometheus" {
       : "spec.template.spec.containers[0].volumeMounts[${v}].readOnly"
     ],
   )
+}
+
+# Create a VPA (with mode: "Off") for workload.
+resource "kubernetes_manifest" "vpas" {
+  depends_on = [
+    kubernetes_manifest.kube_prometheus_setup_namespaces,
+    kubernetes_manifest.kube_prometheus_setup_remaining,
+  ]
+  for_each = {
+    for manifest in [
+      for _manifest in [
+        for file_path in flatten([
+          fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_path, path.module, "./")}/*"),
+          fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*"),
+        ])
+        : yamldecode(file("${path.module}/${file_path}"))
+      ]
+      : _manifest if(
+        _manifest.apiVersion == "apps/v1" && _manifest.kind == "Deployment"
+        || _manifest.apiVersion == "apps/v1" && _manifest.kind == "DaemonSet"
+        || _manifest.apiVersion == "monitoring.coreos.com/v1" && _manifest.kind == "Alertmanager"
+        || _manifest.apiVersion == "monitoring.coreos.com/v1" && _manifest.kind == "Prometheus"
+      )
+    ]
+    : join(",", compact([
+      "apiVersion=${manifest.apiVersion}",
+      "kind=${manifest.kind}",
+      try("namespace=${manifest.metadata.namespace}", ""),
+      try("name=${manifest.metadata.name}", ""),
+    ]))
+    => manifest
+  }
+  manifest = {
+    apiVersion = "autoscaling.k8s.io/v1"
+    kind       = "VerticalPodAutoscaler"
+    metadata = {
+      namespace = each.value.metadata.namespace
+      name      = "${lower(each.value.kind)}-${each.value.metadata.name}"
+    }
+    spec = {
+      targetRef = {
+        apiVersion = each.value.apiVersion
+        kind       = each.value.kind
+        name       = each.value.metadata.name
+      }
+      updatePolicy = {
+        updateMode = "Off"
+      }
+    }
+  }
 }
