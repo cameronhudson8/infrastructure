@@ -53,6 +53,7 @@ Terraform code for creating local and cloud infrastructure where applications ar
     export MONITORING_EMAIL_SENDER_PASSWORD='...'
     modules=(
       "monitoring-crds",
+      "vpa-crds",
       "monitoring"
     )
     for module in "${modules[@]}"; do
@@ -71,6 +72,7 @@ Terraform code for creating local and cloud infrastructure where applications ar
     export MONITORING_EMAIL_SENDER_PASSWORD='...'
     modules=(
       "monitoring",
+      "vpa-crds",
       "monitoring-crds"
     )
     for module in "${modules[@]}"; do

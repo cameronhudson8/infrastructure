@@ -7,16 +7,12 @@ locals {
   global_vars = read_terragrunt_config(find_in_parent_folders("global-vars.hcl")).locals
 }
 
-generate "providers" {
-  path      = "terragrunt-generated-providers.tf"
+generate "versions" {
+  path      = "${get_terragrunt_dir()}/versions.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     terraform {
       required_providers {
-        kubectl = {
-          source  = "gavinbunney/kubectl"
-          version = "~> 1.0"
-        }
         kubernetes = {
           source  = "hashicorp/kubernetes"
           version = "~> 2.0"
@@ -24,12 +20,13 @@ generate "providers" {
       }
       required_version = "~> 1.0"
     }
+  EOF
+}
 
-    provider "kubectl" {
-      config_path    = "~/.kube/config"
-      config_context = ${jsonencode(local.env_vars.kube_context)}
-    }
-
+generate "providers" {
+  path      = "${get_terragrunt_dir()}/providers.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<-EOF
     provider "kubernetes" {
       config_path    = "~/.kube/config"
       config_context = ${jsonencode(local.env_vars.kube_context)}
@@ -37,13 +34,15 @@ generate "providers" {
   EOF
 }
 
-generate "module" {
-  path      = "terragrunt-generated-module.tf"
+generate "main" {
+  path      = "${get_terragrunt_dir()}/main.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
-    module "prometheus_operator" {
-      source           = "../../../modules/prometheus-operator"
-      operator_version = ${jsonencode(local.global_vars.prometheus_operator_version)}
+    module "vpa_crds" {
+      metrics_server_version = ${jsonencode(local.global_vars.metrics_server_version)}
+      namespace_name         = ${jsonencode(local.global_vars.vpa_namespace_name)}
+      operator_version       = ${jsonencode(local.global_vars.vpa_operator_version)}
+      source                 = "../../../modules/vpa-crds"
     }
   EOF
 }

@@ -1,6 +1,7 @@
 locals {
   kube_prometheus_version    = "v0.14.0"
   kube_state_metrics_version = "v2.13.0"
+  metrics_server_version     = "v0.7.2"
   monitoring_email_sender = {
     address       = "monitoring@cameronhudson8.com"
     transport     = "smtp.zoho.com:587"
