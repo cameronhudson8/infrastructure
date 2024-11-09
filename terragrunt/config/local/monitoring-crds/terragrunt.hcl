@@ -39,14 +39,8 @@ generate "main" {
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     module "monitoring_crds" {
-      alertmanager_replicas             = ${jsonencode(local.env_vars.alertmanager_replicas)}
-      email_recipient_address           = ${jsonencode(local.global_vars.monitoring_email_recipient_address)}
-      kube_prometheus_alerts_to_disable = ${jsonencode(local.env_vars.kube_prometheus_alerts_to_disable)}
-      kube_prometheus_version           = ${jsonencode(local.global_vars.kube_prometheus_version)}
-      kube_state_metrics_version        = ${jsonencode(local.global_vars.kube_state_metrics_version)}
-      namespace_name                    = ${jsonencode(local.global_vars.monitoring_namespace_name)}
-      prometheus_replicas               = ${jsonencode(local.env_vars.prometheus_replicas)}
-      source                            = "../../../modules/monitoring-crds"
+      kube_prometheus_version = ${jsonencode(local.global_vars.kube_prometheus_version)}
+      source                  = "../../../modules/monitoring-crds"
     }
   EOF
 }

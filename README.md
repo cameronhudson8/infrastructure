@@ -49,8 +49,8 @@ Terraform code for creating local and cloud infrastructure where applications ar
 1. Apply the modules.
     ```
     ENV_NAME='local'
-    export MONITORING_EMAIL_SENDER_USERNAME='...'
-    export MONITORING_EMAIL_SENDER_PASSWORD='...'
+    export MONITORING_EMAILS_SENDER_EMAIL_ADDRESS='...'
+    export MONITORING_EMAILS_SENDER_PASSWORD='...'
     modules=(
       "monitoring-crds",
       "vpa-crds",
@@ -68,15 +68,15 @@ Terraform code for creating local and cloud infrastructure where applications ar
 1. Destroy the modules in opposite order in which they were applied.
     ```
     ENV_NAME='local'
-    export MONITORING_EMAIL_SENDER_USERNAME='...'
-    export MONITORING_EMAIL_SENDER_PASSWORD='...'
+    export MONITORING_EMAILS_SENDER_EMAIL_ADDRESS='...'
+    export MONITORING_EMAILS_SENDER_PASSWORD='...'
     modules=(
       "monitoring",
       "vpa-crds",
       "monitoring-crds"
     )
     for module in "${modules[@]}"; do
-        terragrunt apply --terragrunt-working-dir "./terragrunt/config/${ENV_NAME}/${module}"
+        terragrunt destroy --terragrunt-working-dir "./terragrunt/config/${ENV_NAME}/${module}"
     done
 1. Delete the Kubernetes context.
     ```

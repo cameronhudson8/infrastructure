@@ -45,13 +45,22 @@ generate "main" {
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     module "monitoring" {
-      email_recipient_address           = ${jsonencode(local.global_vars.monitoring_email_recipient_address)}
-      email_sender                      = ${jsonencode(local.global_vars.monitoring_email_sender)}
-      email_sender_auth_password        = ${jsonencode(get_env("MONITORING_EMAIL_SENDER_PASSWORD"))}
-      email_sender_auth_username        = ${jsonencode(get_env("MONITORING_EMAIL_SENDER_USERNAME"))}
+      emails = ${jsonencode(
+        merge(
+          {
+            sender = merge(
+              {
+                email_address = get_env("MONITORING_EMAILS_SENDER_EMAIL_ADDRESS")
+                password      = get_env("MONITORING_EMAILS_SENDER_PASSWORD")
+              },
+              local.global_vars.monitoring_emails.sender,
+            )
+          },
+          local.global_vars.monitoring_emails,
+        )
+      )}
       kube_prometheus_alerts_to_disable = ${jsonencode(local.env_vars.kube_prometheus_alerts_to_disable)}
       kube_prometheus_version           = ${jsonencode(local.global_vars.kube_prometheus_version)}
-      kube_state_metrics_version        = ${jsonencode(local.global_vars.kube_state_metrics_version)}
       namespace_name                    = ${jsonencode(local.global_vars.monitoring_namespace_name)}
       prometheus_replicas               = ${jsonencode(local.env_vars.prometheus_replicas)}
       source                            = "../../../modules/monitoring"

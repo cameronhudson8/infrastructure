@@ -5,6 +5,7 @@ variable "kubernetes_client_certificate" {
 
 variable "kubernetes_client_key" {
   description = "The client certificate for authentication with the Kubernetes API server"
+  sensitive   = true
   type        = string
 }
 

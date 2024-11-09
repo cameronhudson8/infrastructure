@@ -1,25 +1,15 @@
-variable "email_sender" {
-  description = "Details of the email account from which monitoring alerts are sent"
+variable "emails" {
+  description = "The configuration for alert emails"
   type = object({
-    address   = string
-    transport = string
+    recipient = object({
+      email_address = string
+    })
+    sender = object({
+      email_address = string
+      password      = sensitive(string)
+      transport     = string
+    })
   })
-}
-
-variable "email_sender_auth_username" {
-  description = "The username of the email account from which monitoring alerts are sent"
-  type        = string
-}
-
-variable "email_sender_auth_password" {
-  description = "The password of the email account from which monitoring alerts are sent"
-  sensitive   = true
-  type        = string
-}
-
-variable "email_recipient_address" {
-  description = "The email address to which monitoring alerts are sent"
-  type        = string
 }
 
 variable "kube_prometheus_alerts_to_disable" {
@@ -30,11 +20,6 @@ variable "kube_prometheus_alerts_to_disable" {
 
 variable "kube_prometheus_version" {
   description = "The version of kube-prometheus to use (for PrometheusRules only)"
-  type        = string
-}
-
-variable "kube_state_metrics_version" {
-  description = "The version of kube-state-metrics to use"
   type        = string
 }
 

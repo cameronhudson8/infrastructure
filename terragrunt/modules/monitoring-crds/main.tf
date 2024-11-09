@@ -1,4 +1,4 @@
-data "external" "kube_prometheus_config" {
+data "external" "kube_prometheus_prepare_manifests" {
   program = [
     "/usr/bin/env",
     "bash",
@@ -6,26 +6,38 @@ data "external" "kube_prometheus_config" {
     "-o",
     "pipefail",
     "-c",
+    # This script is based on the kube-prometheus installation docs.
+    # https://github.com/prometheus-operator/kube-prometheus/blob/main/docs/customizing.md
     <<-EOF
-      path="$(mktemp)"
-      cat <<CONFIG >"$${path}"
-      local kp =
-        (import 'kube-prometheus/main.libsonnet') +
-        // Uncomment the following imports to enable its patches
-        // (import 'kube-prometheus/addons/anti-affinity.libsonnet') +
-        // (import 'kube-prometheus/addons/managed-cluster.libsonnet') +
-        // (import 'kube-prometheus/addons/node-ports.libsonnet') +
-        // (import 'kube-prometheus/addons/static-etcd.libsonnet') +
-        // (import 'kube-prometheus/addons/custom-metrics.libsonnet') +
-        // (import 'kube-prometheus/addons/external-metrics.libsonnet') +
-        // (import 'kube-prometheus/addons/pyrra.libsonnet') +
-        {
-          values+:: {
-            common+: {
-              namespace: '${var.namespace_name}',
-            },
-          },
-        };
+      REPO='github.com/prometheus-operator/kube-prometheus'
+      SUBDIR='jsonnet/kube-prometheus'
+      MANIFESTS_PATH="${path.module}/kube-prometheus/manifests"
+      MANIFESTS_SETUP_PATH="${path.module}/kube-prometheus/manifests/setup"
+
+      mkdir -p "${path.module}/kube-prometheus"
+      pushd "${path.module}/kube-prometheus" >/dev/null
+      # Create the initial/empty `jsonnetfile.json'.
+      if ! [ -f jsonnetfile.json ]; then
+        jb init
+      fi
+      installed_version=$(
+        jq -r \
+          "
+            .dependencies[] \
+            | select(.source.git.remote == \"https://$${REPO}.git\" and .source.git.subdir == \"$${SUBDIR}\")
+            | .version
+          " \
+          ./jsonnetfile.json
+      )
+      if [ "$${installed_version}" != '${var.kube_prometheus_version}' ]; then
+        # Install the kube-prometheus dependency.
+        # Creates `vendor/` and `jsonnetfile.lock.json`, and fills in `jsonnetfile.json`.
+        jb -q install "$${REPO}/$${SUBDIR}@${var.kube_prometheus_version}"
+      fi
+
+      kube_prometheus_config_path="$(mktemp)"
+      cat <<CONFIG >"$${kube_prometheus_config_path}"
+      local kp = (import 'kube-prometheus/main.libsonnet');
 
       { 'setup/0namespace-namespace': kp.kubePrometheus.namespace } +
       {
@@ -47,49 +59,31 @@ data "external" "kube_prometheus_config" {
       { ['prometheus-' + name]: kp.prometheus[name] for name in std.objectFields(kp.prometheus) } +
       { ['prometheus-adapter-' + name]: kp.prometheusAdapter[name] for name in std.objectFields(kp.prometheusAdapter) }
       CONFIG
-      echo "{\"path\": \"$${path}\"}"
-  EOF
-  ]
-}
 
-data "external" "kube_prometheus_prepare_manifests" {
-  program = [
-    "/usr/bin/env",
-    "bash",
-    "-eu",
-    "-o",
-    "pipefail",
-    "-c",
-    # This script is based on the kube-prometheus installation docs.
-    # https://github.com/prometheus-operator/kube-prometheus/blob/main/docs/customizing.md
-    <<-EOF
-      mkdir -p "${path.module}/kube-prometheus"
-      pushd "${path.module}/kube-prometheus" >/dev/null
-      # Create the initial/empty `jsonnetfile.json'.
-      rm -f jsonnetfile.json jsonnetfile.lock.json
-      if ! [ -f jsonnetfile.json ]; then
-        jb init
-      fi
-      # Install the kube-prometheus dependency.
-      # Creates `vendor/` and `jsonnetfile.lock.json`, and fills in `jsonnetfile.json`.
-      jb -q install 'github.com/prometheus-operator/kube-prometheus/jsonnet/kube-prometheus@${var.kube_prometheus_version}'
+      manifests_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_PATH}" -regex '.*\.ya?ml') | md5 -q)
+      manifests_setup_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_SETUP_PATH}" -regex '.*\.ya?ml') | md5 -q)
+
       curl 'https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/${var.kube_prometheus_version}/build.sh' \
           --fail-with-body \
           -LsS \
-          | sh -s "${data.external.kube_prometheus_config.result.path}"
-      echo '{}'
+          | sh -s "$${kube_prometheus_config_path}"
+      jq -cM '.' <<JSON
+          {
+              "manifests_checksum": "$${manifests_checksum}",
+              "manifests_path": "$${MANIFESTS_PATH}",
+              "manifests_setup_checksum": "$${manifests_setup_checksum}",
+              "manifests_setup_path": "$${MANIFESTS_SETUP_PATH}"
+          }
+      JSON
     EOF
   ]
 }
 
 resource "kubernetes_manifest" "kube_prometheus_setup_crds" {
-  depends_on = [
-    data.external.kube_prometheus_prepare_manifests,
-  ]
   for_each = {
     for manifest in [
       for _manifest in [
-        for file_path in fileset(path.module, "kube-prometheus/manifests/setup/*")
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*")
         : yamldecode(file("${path.module}/${file_path}"))
       ]
       : _manifest if contains(["CustomResourceDefinition"], _manifest.kind)
