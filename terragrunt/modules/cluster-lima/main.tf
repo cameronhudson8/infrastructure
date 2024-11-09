@@ -13,7 +13,59 @@ resource "terraform_data" "cluster" {
           --disk 20 \
           --memory 8 \
           --name '${var.vm_name}' \
-          --set ".provision = (.provision | map(to_entries | map({ \"key\": .key, \"value\": (.value | sub(\"VERSION=.*\"; \"VERSION='${var.kubernetes_version}'\")) }) | from_entries))"
+          --set ".provision = (
+              .provision
+              | map(
+                  to_entries
+                  | map({
+                      \"key\": .key,
+                      \"value\": (
+                          .value
+                          | sub(\"VERSION=.*\"; \"VERSION='${var.kubernetes_version}'\")
+                      )
+                  })
+                  | from_entries
+                )
+          )" \
+          --set '.provision = (
+              .provision
+              | map(
+                  to_entries
+                  | .[]
+                  |= (
+                      (.value | match("(?P<before>[\s\S]+?)(?P<clusterConfig>kind: ClusterConfiguration[\s\S]+)(?P<after>---[\s\S]+)")) as $matches
+                      | with(
+                          select(($matches | length) == 0);
+                          .value
+                          )
+                      | with(
+                          select(($matches | length) > 0);
+                          .value = (
+                              ($matches.captures[] | select(.name == "before") | .string) as $before
+                              | ($matches.captures[] | select(.name == "clusterConfig") | .string) as $clusterConfig
+                              | ($matches.captures[] | select(.name == "after") | .string) as $after
+                              | $clusterConfig
+                              | fromyaml
+                              | . += {
+                                  "controllerManager": {
+                                      "extraArgs": {
+                                          "bind-address": "0.0.0.0"
+                                      }
+                                  },
+                                  "scheduler": {
+                                      "extraArgs": {
+                                          "bind-address": "0.0.0.0"
+                                      }
+                                  }
+                              }
+                              | toyaml
+                              | "\($before)\(.)\($after)"
+                          )
+                      )
+                  )
+                  | from_entries
+              )
+          )'
       limactl start "${var.vm_name}"
       yq -i ". *= load(\"$${HOME}/.lima/${var.vm_name}/copied-from-guest/kubeconfig.yaml\") | .contexts[0].name = \"${var.kubectl_context_name}\"" "$${HOME}/.kube/config"
     EOF
