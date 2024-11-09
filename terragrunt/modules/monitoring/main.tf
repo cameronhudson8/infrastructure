@@ -336,8 +336,8 @@ resource "kubernetes_secret" "email_sender_creds" {
     namespace = var.namespace_name
   }
   data = {
-    password = var.emails.sender.password
-    username = var.emails.sender.email_address
+    password = var.email_sender_password
+    username = var.email_sender_email_address
   }
 }
 
@@ -432,17 +432,17 @@ resource "kubernetes_manifest" "alertmanager_config" {
                 name = kubernetes_secret.email_sender_creds.metadata[0].name
                 key  = "password"
               }
-              authUsername = var.emails.sender.email_address
+              authUsername = var.email_sender_email_address
               headers = [
                 {
                   key   = "subject"
                   value = "Prometheus Alert"
                 }
               ]
-              from         = var.emails.sender.email_address
+              from         = var.email_sender_email_address
               sendResolved = true
-              smarthost    = var.emails.sender.transport
-              to           = var.emails.recipient.email_address
+              smarthost    = var.email_sender_transport
+              to           = var.email_recipient_email_address
             }
           ]
           name = "email"

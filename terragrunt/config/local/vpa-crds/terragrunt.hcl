@@ -1,3 +1,9 @@
+dependencies {
+  paths = [
+    "../cluster",
+  ]
+}
+
 include "backend" {
   path = find_in_parent_folders("backend.hcl")
 }
@@ -33,7 +39,7 @@ generate "providers" {
   contents  = <<-EOF
     provider "kubernetes" {
       config_path    = "~/.kube/config"
-      config_context = ${jsonencode(local.env_vars.kube_context)}
+      config_context = ${jsonencode(local.env_vars.kubectl_context_name)}
     }
 
     data "external" "kubernetes" {
@@ -48,10 +54,10 @@ generate "providers" {
             yq \
                 '
                     .
-                    | (.contexts[] | select(.name == "${local.env_vars.kube_context}") | .context.cluster) as $clusterName
+                    | (.contexts[] | select(.name == "${local.env_vars.kubectl_context_name}") | .context.cluster) as $clusterName
                     | (.clusters[] | select(.name == $clusterName) | .cluster["certificate-authority-data"] | @base64d) as $certificateAuthority
                     | (.clusters[] | select(.name == $clusterName) | .cluster.server) as $server
-                    | (.contexts[] | select(.name == "${local.env_vars.kube_context}") | .context.user) as $userName
+                    | (.contexts[] | select(.name == "${local.env_vars.kubectl_context_name}") | .context.user) as $userName
                     | (.users[] | select(.name == $userName) | .user["client-certificate-data"] | @base64d) as $clientCertificate
                     | (.users[] | select(.name == $userName) | .user["client-key-data"] | @base64d) as $clientKey
                     |

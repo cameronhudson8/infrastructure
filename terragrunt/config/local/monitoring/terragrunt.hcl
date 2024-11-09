@@ -35,7 +35,7 @@ generate "providers" {
   contents  = <<-EOF
     provider "kubernetes" {
       config_path    = "~/.kube/config"
-      config_context = ${jsonencode(local.env_vars.kube_context)}
+      config_context = ${jsonencode(local.env_vars.kubectl_context_name)}
     }
   EOF
 }
@@ -45,25 +45,13 @@ generate "main" {
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     module "monitoring" {
-      emails = ${jsonencode(
-        merge(
-          {
-            sender = merge(
-              {
-                email_address = get_env("MONITORING_EMAILS_SENDER_EMAIL_ADDRESS")
-                password      = get_env("MONITORING_EMAILS_SENDER_PASSWORD")
-              },
-              local.global_vars.monitoring_emails.sender,
-            )
-          },
-          local.global_vars.monitoring_emails,
-        )
-      )}
-      kube_prometheus_alerts_to_disable = ${jsonencode(local.env_vars.kube_prometheus_alerts_to_disable)}
-      kube_prometheus_version           = ${jsonencode(local.global_vars.kube_prometheus_version)}
-      namespace_name                    = ${jsonencode(local.global_vars.monitoring_namespace_name)}
-      prometheus_replicas               = ${jsonencode(local.env_vars.prometheus_replicas)}
-      source                            = "../../../modules/monitoring"
+      email_recipient_email_address = ${jsonencode(local.global_vars.monitoring_email_recipient_email_address)}
+      email_sender_email_address    = "${get_env("MONITORING_EMAIL_SENDER_EMAIL_ADDRESS")}"
+      email_sender_password         = "${get_env("MONITORING_EMAIL_SENDER_PASSWORD")}"
+      email_sender_transport        = ${jsonencode(local.global_vars.monitoring_email_sender_transport)}
+      kube_prometheus_version       = ${jsonencode(local.global_vars.kube_prometheus_version)}
+      namespace_name                = ${jsonencode(local.global_vars.monitoring_namespace_name)}
+      source                        = "../../../modules/monitoring"
     }
   EOF
 }

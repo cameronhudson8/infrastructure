@@ -1,21 +1,22 @@
-variable "emails" {
-  description = "The configuration for alert emails"
-  type = object({
-    recipient = object({
-      email_address = string
-    })
-    sender = object({
-      email_address = string
-      password      = sensitive(string)
-      transport     = string
-    })
-  })
+variable "email_recipient_email_address" {
+  description = "The email address to which to send alerts"
+  type        = string
 }
 
-variable "kube_prometheus_alerts_to_disable" {
-  default     = []
-  description = "Alerts that kube-prometheus includes, but which we want to disable."
-  type        = list(string)
+variable "email_sender_email_address" {
+  description = "The email address from which to send alerts"
+  type        = string
+}
+
+variable "email_sender_password" {
+  description = "The password with which to authenticate with the email server"
+  sensitive   = true
+  type        = string
+}
+
+variable "email_sender_transport" {
+  description = "The hostname:port of the email server"
+  type        = string
 }
 
 variable "kube_prometheus_version" {
@@ -26,9 +27,4 @@ variable "kube_prometheus_version" {
 variable "namespace_name" {
   description = "The name of the namespace to use."
   type        = string
-}
-
-variable "prometheus_replicas" {
-  description = "The number of Prometheus replicas"
-  type        = number
 }
