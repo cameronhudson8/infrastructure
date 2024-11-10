@@ -2,62 +2,54 @@
 
 Terraform code for creating local and cloud infrastructure where applications are deployed.
 
-## Setup
+## Prerequisites
+
+* [kubectl](https://kubernetes.io/docs/tasks/tools/)
+* [lima](https://github.com/lima-vm/lima)
+* [terraform](https://developer.hashicorp.com/terraform/install)
+* [terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/)
+* [yq](https://mikefarah.gitbook.io/yq)
+* A mail server configured with a domain. The email address used for Prometheus monitoring is set in [terragrunt/config/global-vars.hcl].
+
+## Usage
 
 ### Local Development
 
-> [!IMPORTANT]
-> Only ARM architecture is supported at this time.
-
-1. Install [Lima](https://github.com/lima-vm/lima).
-1. Create a virtual machine (VM) based on the lima template in [lima/kubernetes.yaml].
+1. Apply the modules.
     ```
-    K8S_VERSION='1.30'
-    VM_NAME='k8s'
-
-    limactl create https://raw.githubusercontent.com/lima-vm/lima/v0.22.0/examples/k8s.yaml \
-        --arch aarch64 \
-        --cpus 2 \
-        --disk 20 \
-        --memory 4 \
-        --name "${VM_NAME}" \
-        --network vzNAT \
-        --set ".provision = (.provision | map(to_entries | map({ \"key\": .key, \"value\": (.value | sub(\"VERSION=.*\"; \"VERSION=${K8S_VERSION}\")) }) | from_entries))" \
-        --tty=false \
-        --vm-type vz
-1. Start the VM.
-    ```
-    limactl start "${VM_NAME}"
-    ```
-1. Import the Kubernetes context from the VM.
-    ```
-    KUBE_CONTEXT='local'
-
-    yq -i ". *= load(\"${HOME}/.lima/${VM_NAME}/copied-from-guest/kubeconfig.yaml\") | .contexts[0].name = \"${KUBE_CONTEXT}\"" ~/.kube/config
-    ```
-1. Confirm that you can list the namespaces in the cluster.
-    ```
-    kubectl --context "${KUBE_CONTEXT}" get namespaces
+    ENV_NAME='local'
+    export MONITORING_EMAIL_SENDER_EMAIL_ADDRESS='...'
+    export MONITORING_EMAIL_SENDER_PASSWORD='...'
+    modules=(
+      "cluster",
+      "monitoring-crds",
+      "vpa-crds",
+      "monitoring"
+    )
+    for module in "${modules[@]}"; do
+        terragrunt apply --terragrunt-working-dir "./terragrunt/config/${ENV_NAME}/${module}"
+    done
     ```
 1. Check the Kubernetes cluster version and your kubectl version. If the difference between the two is too large, then [install a newer version of kubectl](https://kubernetes.io/docs/tasks/tools/).
     ```
-    kubectl --context "${KUBE_CONTEXT}" version
+    kubectl --context local version
     ```
 
 ## Cleanup
 
 ### Local Development
 
-1. Delete the Kubernetes context.
+1. Destroy the modules in opposite order in which they were applied.
     ```
-    KUBE_CONTEXT='local'
-
-    kubectl config delete-context "${KUBE_CONTEXT}"
-    ```
-1. Delete the Kubernetes VM.
-    ```
-    VM_NAME='k8s'
-
-    limactl stop "${VM_NAME}"
-    limactl delete "${VM_NAME}"
-    ```
+    ENV_NAME='local'
+    export MONITORING_EMAIL_SENDER_EMAIL_ADDRESS='...'
+    export MONITORING_EMAIL_SENDER_PASSWORD='...'
+    modules=(
+      "monitoring",
+      "vpa-crds",
+      "monitoring-crds",
+      "cluster"
+    )
+    for module in "${modules[@]}"; do
+        terragrunt destroy --terragrunt-working-dir "./terragrunt/config/${ENV_NAME}/${module}"
+    done
