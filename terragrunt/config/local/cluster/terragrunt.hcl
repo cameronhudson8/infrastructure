@@ -30,7 +30,7 @@ generate "main" {
   contents  = <<-EOF
     module "cluster" {
       kubectl_context_name  = ${jsonencode(local.env_vars.kubectl_context_name)}
-      kubernetes_version    = ${jsonencode(local.global_vars.kubernetes_version)}
+      kubernetes_version    = ${jsonencode(local.env_vars.kubernetes_version)}
       lima_version          = ${jsonencode(local.env_vars.lima_version)}
       source                = "../../../modules/cluster-lima"
       vm_name               = ${jsonencode(local.env_vars.vm_name)}

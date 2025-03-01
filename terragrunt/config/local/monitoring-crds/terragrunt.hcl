@@ -45,7 +45,7 @@ generate "main" {
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     module "monitoring_crds" {
-      kube_prometheus_version = ${jsonencode(local.global_vars.kube_prometheus_version)}
+      kube_prometheus_version = ${jsonencode(local.env_vars.kube_prometheus_version)}
       source                  = "../../../modules/monitoring-crds"
     }
   EOF
