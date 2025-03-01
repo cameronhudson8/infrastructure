@@ -90,7 +90,7 @@ generate "main" {
       kubernetes_cluster_ca_certificate = "$${data.external.kubernetes.result.cluster_ca_certificate}"
       kubernetes_server                 = "$${data.external.kubernetes.result.server}"
       namespace_name                    = ${jsonencode(local.global_vars.vpa_namespace_name)}
-      operator_version                  = ${jsonencode(local.global_vars.vpa_operator_version)}
+      operator_version                  = ${jsonencode(local.env_vars.vpa_operator_version)}
       source                            = "../../../modules/vpa-crds"
     }
   EOF
