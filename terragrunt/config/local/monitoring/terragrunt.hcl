@@ -49,7 +49,7 @@ generate "main" {
       email_sender_email_address    = "${get_env("MONITORING_EMAIL_SENDER_EMAIL_ADDRESS")}"
       email_sender_password         = "${get_env("MONITORING_EMAIL_SENDER_PASSWORD")}"
       email_sender_transport        = ${jsonencode(local.global_vars.monitoring_email_sender_transport)}
-      kube_prometheus_version       = ${jsonencode(local.global_vars.kube_prometheus_version)}
+      kube_prometheus_version       = ${jsonencode(local.env_vars.kube_prometheus_version)}
       namespace_name                = ${jsonencode(local.global_vars.monitoring_namespace_name)}
       source                        = "../../../modules/monitoring"
     }
