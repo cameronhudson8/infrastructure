@@ -1,5 +1,2 @@
 .terraform/
-backend.tf
-main.tf
-providers.tf
-versions.tf
+*.tf
