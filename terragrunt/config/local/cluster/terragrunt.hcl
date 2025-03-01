@@ -7,8 +7,8 @@ locals {
   global_vars = read_terragrunt_config(find_in_parent_folders("global-vars.hcl")).locals
 }
 
-generate "versions" {
-  path      = "${get_terragrunt_dir()}/versions.tf"
+generate "terraform" {
+  path      = "${get_terragrunt_dir()}/terraform.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     terraform {
