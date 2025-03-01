@@ -1,9 +1,3 @@
-dependencies {
-  paths = [
-    "../monitoring-crds",
-  ]
-}
-
 include "backend" {
   path = find_in_parent_folders("backend.hcl")
 }
@@ -19,6 +13,10 @@ generate "terraform" {
   contents  = <<-EOF
     terraform {
       required_providers {
+        helm = {
+          source  = "hashicorp/helm"
+          version = "~> 2.0"
+        }
         kubernetes = {
           source  = "hashicorp/kubernetes"
           version = "~> 2.0"
@@ -33,6 +31,13 @@ generate "providers" {
   path      = "${get_terragrunt_dir()}/providers.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
+    provider "helm" {
+      kubernetes {
+        config_path    = "~/.kube/config"
+        config_context = ${jsonencode(local.env_vars.kubectl_context_name)}
+      }
+    }
+
     provider "kubernetes" {
       config_path    = "~/.kube/config"
       config_context = ${jsonencode(local.env_vars.kubectl_context_name)}
@@ -44,14 +49,10 @@ generate "main" {
   path      = "${get_terragrunt_dir()}/main.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
-    module "monitoring" {
-      email_recipient_email_address = ${jsonencode(local.global_vars.monitoring_email_recipient_email_address)}
-      email_sender_email_address    = "${get_env("MONITORING_EMAIL_SENDER_EMAIL_ADDRESS")}"
-      email_sender_password         = "${get_env("MONITORING_EMAIL_SENDER_PASSWORD")}"
-      email_sender_transport        = ${jsonencode(local.global_vars.monitoring_email_sender_transport)}
-      kube_prometheus_version       = ${jsonencode(local.env_vars.kube_prometheus_version)}
-      namespace_name                = ${jsonencode(local.global_vars.monitoring_namespace_name)}
-      source                        = "../../../modules/monitoring"
+    module "ingress_nginx" {
+      helm_chart_version = ${jsonencode(local.env_vars.ingress_nginx_helm_chart_version)}
+      service_type       = ${jsonencode(local.env_vars.ingress_nginx_service_type)}
+      source             = "../../../modules/ingress-nginx"
     }
   EOF
 }

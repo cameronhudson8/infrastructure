@@ -34,6 +34,22 @@ Terraform code for creating local and cloud infrastructure where applications ar
     ```
     kubectl --context local version
     ```
+1. Identify the host port in use by ingress-nginx by examining the ingress-nginx service. In the example below, host port 32318 is mapped to port 80 of the Kubernetes virtual machine.
+    ```
+    $ kubectl --context local -n ingress-nginx get svc
+    NAME                                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+    ingress-nginx-controller             NodePort    10.103.124.199   <none>        80:32318/TCP,443:30877/TCP   26m
+    ingress-nginx-controller-admission   ClusterIP   10.100.165.213   <none>        443/TCP                      26m
+
+    $ curl http://localhost:32318
+    <html>
+    <head><title>404 Not Found</title></head>
+    <body>
+    <center><h1>404 Not Found</h1></center>
+    <hr><center>nginx</center>
+    </body>
+    </html>
+    ```
 
 ## Cleanup
 
