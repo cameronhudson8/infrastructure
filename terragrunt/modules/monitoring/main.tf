@@ -609,3 +609,205 @@ resource "kubernetes_manifest" "vpas" {
     }
   }
 }
+
+resource "helm_release" "loki" {
+  chart      = "loki-distributed"
+  name       = "loki"
+  namespace  = var.namespace_name
+  repository = "https://grafana.github.io/helm-charts"
+  values = [
+    yamlencode({
+    })
+  ]
+  version = var.loki_distributed_helm_chart_version
+}
+
+# Grafana is bundled with kube-prometheus... :/
+# resource "helm_release" "grafana" {
+#   chart      = "grafana"
+#   name       = "grafana"
+#   namespace  = var.namespace_name
+#   repository = "https://grafana.github.io/helm-charts"
+#   values = [
+#     yamlencode({
+#     })
+#   ]
+#   version = var.grafana_helm_chart_version
+# }
+
+resource "helm_release" "tempo" {
+  chart      = "tempo-distributed"
+  name       = "tempo"
+  namespace  = var.namespace_name
+  repository = "https://grafana.github.io/helm-charts"
+  values = [
+    yamlencode({
+    })
+  ]
+  version = var.tempo_distributed_helm_chart_version
+}
+
+# Get the default Helm chart values, so we can create persistent volumes of
+# appropriate sizes.
+data "http" "mimir_distributed_helm_chart_default_values" {
+  url = "https://raw.githubusercontent.com/grafana/mimir/refs/tags/mimir-distributed-${var.mimir_distributed_helm_chart_version}/operations/helm/charts/mimir-distributed/values.yaml"
+}
+
+locals {
+  mimir_distributed_helm_chart_default_values = yamldecode(data.http.mimir_distributed_helm_chart_default_values.response_body)
+
+  mimir_volumes = [
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
+      host_path        = "/mnt/mimir-minio"
+      pv_name          = "mimir-minio"
+      pvc_name         = "mimir-minio"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-alertmanager-0"
+      pv_name          = "storage-mimir-alertmanager-0"
+      pvc_name         = "storage-mimir-alertmanager-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-compactor-0"
+      pv_name          = "storage-mimir-compactor-0"
+      pvc_name         = "storage-mimir-compactor-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-ingester-zone-a-0"
+      pv_name          = "storage-mimir-ingester-zone-a-0"
+      pvc_name         = "storage-mimir-ingester-zone-a-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-ingester-zone-b-0"
+      pv_name          = "storage-mimir-ingester-zone-b-0"
+      pvc_name         = "storage-mimir-ingester-zone-b-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-ingester-zone-c-0"
+      pv_name          = "storage-mimir-ingester-zone-c-0"
+      pvc_name         = "storage-mimir-ingester-zone-c-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-store-gateway-zone-a-0"
+      pv_name          = "storage-mimir-store-gateway-zone-a-0"
+      pvc_name         = "storage-mimir-store-gateway-zone-a-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-store-gateway-zone-b-0"
+      pv_name          = "storage-mimir-store-gateway-zone-b-0"
+      pvc_name         = "storage-mimir-store-gateway-zone-b-0"
+    },
+    {
+      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+      host_path        = "/mnt/storage-mimir-store-gateway-zone-c-0"
+      pv_name          = "storage-mimir-store-gateway-zone-c-0"
+      pvc_name         = "storage-mimir-store-gateway-zone-c-0"
+    },
+  ]
+}
+
+resource "terraform_data" "host_paths" {
+  for_each = {
+    for volume in local.mimir_volumes
+    : volume.pvc_name => volume
+  }
+  input = {
+    host_path = each.value.host_path
+    vm_name   = var.vm_name
+  }
+  provisioner "local-exec" {
+    command = "limactl shell ${self.input.vm_name} sudo mkdir -p ${self.input.host_path}"
+    when    = create
+  }
+  provisioner "local-exec" {
+    command = "limactl shell ${self.input.vm_name} sudo rm -rf ${self.input.host_path}"
+    when    = destroy
+  }
+}
+
+resource "kubernetes_persistent_volume" "mimir_volumes" {
+  for_each = {
+    for volume in local.mimir_volumes
+    : volume.pvc_name => volume
+  }
+  metadata {
+    name = each.value.pv_name
+  }
+  spec {
+    access_modes = [
+      "ReadWriteOnce",
+    ]
+    capacity = {
+      storage = each.value.default_capacity
+    }
+    claim_ref {
+      name      = each.value.pvc_name
+      namespace = var.namespace_name
+    }
+    node_affinity {
+      required {
+        node_selector_term {
+          # Match any node
+          match_expressions {
+            key      = "kubernetes.io/hostname"
+            operator = "Exists"
+          }
+        }
+      }
+    }
+    persistent_volume_source {
+      local {
+        path = each.value.host_path
+      }
+    }
+    storage_class_name = var.storage_class_name
+  }
+}
+
+resource "helm_release" "mimir" {
+  depends_on = [
+    terraform_data.host_paths,
+  ]
+  chart      = "mimir-distributed"
+  name       = "mimir"
+  namespace  = var.namespace_name
+  repository = "https://grafana.github.io/helm-charts"
+  values = [
+    yamlencode({
+      minio = {
+        persistence = {
+          size = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
+        }
+      }
+      alertmanager = {
+        persistentVolume = {
+          size = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
+        }
+      }
+      compactor = {
+        persistentVolume = {
+          size = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
+        }
+      }
+      ingester = {
+        persistentVolume = {
+          size = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+        }
+      }
+      store_gateway = {
+        persistentVolume = {
+          size = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+        }
+      }
+    })
+  ]
+  version = var.mimir_distributed_helm_chart_version
+}
