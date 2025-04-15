@@ -41,7 +41,7 @@ resource "terraform_data" "cluster" {
           limactl create 'https://raw.githubusercontent.com/lima-vm/lima/refs/tags/${self.input.lima_version}/templates/k8s.yaml' \
               --cpus 4 \
               --disk 20 \
-              --memory 12 \
+              --memory 8 \
               --name '${self.input.vm_name}' \
               --set ".provision = (
                   .provision

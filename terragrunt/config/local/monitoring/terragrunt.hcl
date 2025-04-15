@@ -64,10 +64,15 @@ generate "main" {
       kube_prometheus_version              = ${jsonencode(local.env_vars.kube_prometheus_version)}
       loki_distributed_helm_chart_version  = ${jsonencode(local.env_vars.loki_distributed_helm_chart_version)}
       mimir_distributed_helm_chart_version = ${jsonencode(local.env_vars.mimir_distributed_helm_chart_version)}
+      mimir_ingester_replicas              = ${jsonencode(local.env_vars.mimir_ingester_replicas)}
+      mimir_querier_replicas               = ${jsonencode(local.env_vars.mimir_querier_replicas)}
+      mimir_query_scheduler_replicas       = ${jsonencode(local.env_vars.mimir_query_scheduler_replicas)}
+      mimir_zone_aware_replication         = ${jsonencode(local.env_vars.mimir_zone_aware_replication)}
       namespace_name                       = ${jsonencode(local.global_vars.monitoring_namespace_name)}
       source                               = "../../../modules/monitoring"
       storage_class_name                   = ${jsonencode(local.env_vars.storage_class_name)}
       tempo_distributed_helm_chart_version = ${jsonencode(local.env_vars.tempo_distributed_helm_chart_version)}
+      tempo_ingester_replicas              = ${jsonencode(local.env_vars.tempo_ingester_replicas)}
       vm_name                              = ${jsonencode(local.env_vars.vm_name)}
     }
   EOF

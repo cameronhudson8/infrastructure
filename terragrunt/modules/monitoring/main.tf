@@ -145,6 +145,7 @@ data "external" "kube_prometheus_prepare_manifests" {
                     },
                   },
                 ],
+                replicas: 1,
               },
             },
           },
@@ -195,6 +196,7 @@ data "external" "kube_prometheus_prepare_manifests" {
                     },
                   },
                 ],
+                replicas: 1,
                 // This is needed to make the VPA happy.
                 shards: 1,
               },
@@ -560,56 +562,6 @@ resource "kubernetes_manifest" "kube_prometheus" {
   )
 }
 
-# Create a VPA (with mode: "Off") for workload.
-resource "kubernetes_manifest" "vpas" {
-  depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
-    kubernetes_manifest.kube_prometheus_setup_remaining,
-  ]
-  for_each = {
-    for manifest in [
-      for _manifest in [
-        for file_path in flatten([
-          fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_path, path.module, "./")}/*"),
-          fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*"),
-        ])
-        : yamldecode(file("${path.module}/${file_path}"))
-      ]
-      : _manifest if(
-        _manifest.apiVersion == "apps/v1" && _manifest.kind == "Deployment"
-        || _manifest.apiVersion == "apps/v1" && _manifest.kind == "DaemonSet"
-        || _manifest.apiVersion == "monitoring.coreos.com/v1" && _manifest.kind == "Alertmanager"
-        || _manifest.apiVersion == "monitoring.coreos.com/v1" && _manifest.kind == "Prometheus"
-      )
-    ]
-    : join(",", compact([
-      "apiVersion=${manifest.apiVersion}",
-      "kind=${manifest.kind}",
-      try("namespace=${manifest.metadata.namespace}", ""),
-      try("name=${manifest.metadata.name}", ""),
-    ]))
-    => manifest
-  }
-  manifest = {
-    apiVersion = "autoscaling.k8s.io/v1"
-    kind       = "VerticalPodAutoscaler"
-    metadata = {
-      namespace = each.value.metadata.namespace
-      name      = "${lower(each.value.kind)}-${each.value.metadata.name}"
-    }
-    spec = {
-      targetRef = {
-        apiVersion = each.value.apiVersion
-        kind       = each.value.kind
-        name       = each.value.metadata.name
-      }
-      updatePolicy = {
-        updateMode = "Off"
-      }
-    }
-  }
-}
-
 resource "helm_release" "loki" {
   chart      = "loki-distributed"
   name       = "loki"
@@ -642,6 +594,9 @@ resource "helm_release" "tempo" {
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
+      ingester = merge(
+        var.tempo_ingester_replicas == null ? {} : { replicas = var.tempo_ingester_replicas },
+      )
     })
   ]
   version = var.tempo_distributed_helm_chart_version
@@ -655,63 +610,64 @@ data "http" "mimir_distributed_helm_chart_default_values" {
 
 locals {
   mimir_distributed_helm_chart_default_values = yamldecode(data.http.mimir_distributed_helm_chart_default_values.response_body)
-
-  mimir_volumes = [
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
-      host_path        = "/mnt/mimir-minio"
-      pv_name          = "mimir-minio"
-      pvc_name         = "mimir-minio"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-alertmanager-0"
-      pv_name          = "storage-mimir-alertmanager-0"
-      pvc_name         = "storage-mimir-alertmanager-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-compactor-0"
-      pv_name          = "storage-mimir-compactor-0"
-      pvc_name         = "storage-mimir-compactor-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-ingester-zone-a-0"
-      pv_name          = "storage-mimir-ingester-zone-a-0"
-      pvc_name         = "storage-mimir-ingester-zone-a-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-ingester-zone-b-0"
-      pv_name          = "storage-mimir-ingester-zone-b-0"
-      pvc_name         = "storage-mimir-ingester-zone-b-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-ingester-zone-c-0"
-      pv_name          = "storage-mimir-ingester-zone-c-0"
-      pvc_name         = "storage-mimir-ingester-zone-c-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-store-gateway-zone-a-0"
-      pv_name          = "storage-mimir-store-gateway-zone-a-0"
-      pvc_name         = "storage-mimir-store-gateway-zone-a-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-store-gateway-zone-b-0"
-      pv_name          = "storage-mimir-store-gateway-zone-b-0"
-      pvc_name         = "storage-mimir-store-gateway-zone-b-0"
-    },
-    {
-      default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-      host_path        = "/mnt/storage-mimir-store-gateway-zone-c-0"
-      pv_name          = "storage-mimir-store-gateway-zone-c-0"
-      pvc_name         = "storage-mimir-store-gateway-zone-c-0"
-    },
-  ]
+  mimir_volumes = concat(
+    [
+      {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
+        host_path        = "/mnt/mimir-minio"
+        pv_name          = "mimir-minio"
+        pvc_name         = "mimir-minio"
+      },
+      {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-alertmanager-0"
+        pv_name          = "storage-mimir-alertmanager-0"
+        pvc_name         = "storage-mimir-alertmanager-0"
+      },
+      {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-compactor-0"
+        pv_name          = "storage-mimir-compactor-0"
+        pvc_name         = "storage-mimir-compactor-0"
+      },
+    ],
+    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+    ? [
+      for zone in ["a", "b", "c"]
+      : {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-ingester-zone-${zone}-0"
+        pv_name          = "storage-mimir-ingester-zone-${zone}-0"
+        pvc_name         = "storage-mimir-ingester-zone-${zone}-0"
+      }
+    ]
+    : [
+      {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-ingester-0"
+        pv_name          = "storage-mimir-ingester-0"
+        pvc_name         = "storage-mimir-ingester-0"
+      },
+    ],
+    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+    ? [
+      for zone in ["a", "b", "c"]
+      : {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-store-gateway-zone-${zone}-0"
+        pv_name          = "storage-mimir-store-gateway-zone-${zone}-0"
+        pvc_name         = "storage-mimir-store-gateway-zone-${zone}-0"
+      }
+    ]
+    : [
+      {
+        default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+        host_path        = "/mnt/storage-mimir-store-gateway-0"
+        pv_name          = "storage-mimir-store-gateway-0"
+        pvc_name         = "storage-mimir-store-gateway-0"
+      },
+    ],
+  )
 }
 
 resource "terraform_data" "host_paths" {
@@ -770,6 +726,9 @@ resource "kubernetes_persistent_volume" "mimir_volumes" {
     }
     storage_class_name = var.storage_class_name
   }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "helm_release" "mimir" {
@@ -797,17 +756,302 @@ resource "helm_release" "mimir" {
           size = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
         }
       }
-      ingester = {
-        persistentVolume = {
-          size = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-        }
-      }
+      ingester = merge(
+        {
+          persistentVolume = {
+            size = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+          }
+          zoneAwareReplication = merge(
+            var.mimir_zone_aware_replication == null ? {} : { enabled = var.mimir_zone_aware_replication },
+          )
+        },
+        var.mimir_ingester_replicas == null ? {} : { replicas = var.mimir_ingester_replicas },
+      )
+      querier = merge(
+        var.mimir_querier_replicas == null ? {} : { replicas = var.mimir_querier_replicas },
+      )
+      query_scheduler = merge(
+        var.mimir_query_scheduler_replicas == null ? {} : { replicas = var.mimir_query_scheduler_replicas }
+      )
       store_gateway = {
         persistentVolume = {
           size = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
         }
+        zoneAwareReplication = merge(
+          var.mimir_zone_aware_replication == null ? {} : { enabled = var.mimir_zone_aware_replication },
+        )
       }
     })
   ]
   version = var.mimir_distributed_helm_chart_version
+}
+
+# Create a VPA (with mode: "Off") for each workload.
+
+# This list was generated manually with the command below.
+# TODO: Automate this somehow. Maybe the dependencies have a feature that deploys VPAs.
+#     kubectl get pod \
+#         --context local \
+#         --namespace monitoring \
+#         --output yaml \
+#     | yq \
+#         --exit-status \
+#         --output-format json \
+#         '
+#             .
+#             | .items
+#             | map(.metadata.ownerReferences[0])
+#             | map({ "apiVersion": .apiVersion, "kind": .kind, "name": .name })
+#             | map(
+#                 .
+#                 | with(
+#                     select(.kind == "ReplicaSet");
+#                     .
+#                     | .kind = "Deployment"
+#                     | .name = (.name | sub("-\\w+$"; ""))
+#                 )
+#                 | with(
+#                     select(.name == "alertmanager-main");
+#                     .
+#                     | .apiVersion = "monitoring.coreos.com/v1"
+#                     | .kind = "Alertmanager"
+#                     | .name = "main"
+#                 )
+#                 | with(
+#                     select(.name == "prometheus-k8s");
+#                     .
+#                     | .apiVersion = "monitoring.coreos.com/v1"
+#                     | .kind = "Prometheus"
+#                     | .name = "k8s"
+#                 )
+#             )
+#             | unique_by(.)
+#             | sort_by(.apiVersion, .kind, .name)
+#          ' \
+#     | sed -E 's/"(.+)":/\1 =/g'
+locals {
+  vpa_configs = concat(
+    [
+      {
+        apiVersion = "apps/v1",
+        kind       = "DaemonSet",
+        name       = "node-exporter"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "blackbox-exporter"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "grafana"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "kube-state-metrics"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "loki-loki-distributed-distributor"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "loki-loki-distributed-gateway"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "loki-loki-distributed-query-frontend"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-distributor"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-minio"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-nginx"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-overrides-exporter"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-querier"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-query-frontend"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-query-scheduler"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-rollout-operator"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "mimir-ruler"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "prometheus-adapter"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "prometheus-operator"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "tempo-compactor"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "tempo-distributor"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "tempo-querier"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "Deployment",
+        name       = "tempo-query-frontend"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "loki-loki-distributed-ingester"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "loki-loki-distributed-querier"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-alertmanager"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-compactor"
+      },
+    ],
+    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+    ? [
+      for zone in ["a", "b", "c"]
+      : {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-ingester-zone-${zone}"
+      }
+    ]
+    : [
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-ingester"
+      },
+    ],
+    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+    ? [
+      for zone in ["a", "b", "c"]
+      : {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-store-gateway-zone-${zone}"
+      }
+    ]
+    : [
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "mimir-store-gateway"
+      },
+    ],
+    [
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "tempo-ingester"
+      },
+      {
+        apiVersion = "apps/v1",
+        kind       = "StatefulSet",
+        name       = "tempo-memcached"
+      },
+      {
+        apiVersion = "batch/v1",
+        kind       = "Job",
+        name       = "mimir-make-minio-buckets-5.3.0"
+      },
+      {
+        apiVersion = "monitoring.coreos.com/v1",
+        kind       = "Alertmanager",
+        name       = "main"
+      },
+      {
+        apiVersion = "monitoring.coreos.com/v1",
+        kind       = "Prometheus",
+        name       = "k8s"
+      }
+    ]
+  )
+}
+
+resource "kubernetes_manifest" "vpas" {
+  for_each = {
+    for vpa_config in local.vpa_configs
+    : join(",", [
+      "apiVersion=${vpa_config.apiVersion}",
+      "kind=${vpa_config.kind}",
+      "namespace=${var.namespace_name}",
+      "name=${vpa_config.name}",
+    ])
+    => vpa_config
+  }
+  manifest = {
+    apiVersion = "autoscaling.k8s.io/v1"
+    kind       = "VerticalPodAutoscaler"
+    metadata = {
+      namespace = var.namespace_name
+      name      = "${lower(each.value.kind)}-${each.value.name}"
+    }
+    spec = {
+      targetRef = {
+        apiVersion = each.value.apiVersion
+        kind       = each.value.kind
+        name       = each.value.name
+      }
+      updatePolicy = {
+        updateMode = "Off"
+      }
+    }
+  }
 }
