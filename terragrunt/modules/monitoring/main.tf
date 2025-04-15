@@ -1,3 +1,9 @@
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = var.namespace_name
+  }
+}
+
 locals {
   alertmanager_global_config_name = "global"
   alertmanager_config_name        = "main"
@@ -218,6 +224,8 @@ data "external" "kube_prometheus_prepare_manifests" {
               },
             },
             common+: {
+              // Use var.namespace_name here, so that manifest preparation can proceed
+              // before the namespace has been created.
               namespace: '${var.namespace_name}',
             },
             kubeStateMetrics+: {
@@ -269,7 +277,7 @@ data "external" "kube_prometheus_prepare_manifests" {
           },
         };
 
-      { 'setup/0namespace-namespace': kp.kubePrometheus.namespace } +
+      // { 'setup/0namespace-namespace': kp.kubePrometheus.namespace } +
       {
         ['setup/prometheus-operator-' + name]: kp.prometheusOperator[name]
         for name in std.filter((function(name) name != 'serviceMonitor' && name != 'prometheusRule'), std.objectFields(kp.prometheusOperator))
@@ -297,7 +305,8 @@ data "external" "kube_prometheus_prepare_manifests" {
           --fail-with-body \
           -LsS \
           | sh -s "$${kube_prometheus_config_path}"
-      jq -cM '.' <<JSON
+      output=$(
+        cat <<JSON
           {
               "manifests_checksum": "$${manifests_checksum}",
               "manifests_path": "$${MANIFESTS_PATH}",
@@ -305,37 +314,16 @@ data "external" "kube_prometheus_prepare_manifests" {
               "manifests_setup_path": "$${MANIFESTS_SETUP_PATH}"
           }
       JSON
+      )
+      jq -cM '.' <<<"$${output}"
     EOF
   ]
 }
 
-resource "kubernetes_manifest" "kube_prometheus_setup_namespaces" {
-  for_each = {
-    for manifest in [
-      for _manifest in [
-        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*")
-        : yamldecode(file("${path.module}/${file_path}"))
-      ]
-      : _manifest if contains(["Namespace"], _manifest.kind)
-    ]
-    : join(",", compact([
-      "apiVersion=${manifest.apiVersion}",
-      "kind=${manifest.kind}",
-      try("namespace=${manifest.metadata.namespace}", ""),
-      try("name=${manifest.metadata.name}", ""),
-    ]))
-    => manifest
-  }
-  manifest = each.value
-}
-
 resource "kubernetes_secret" "email_sender_creds" {
-  depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
-  ]
   metadata {
     name      = "monitoring-email-sender-creds"
-    namespace = var.namespace_name
+    namespace = kubernetes_namespace.monitoring.metadata[0].name
   }
   data = {
     password = var.email_sender_password
@@ -345,9 +333,6 @@ resource "kubernetes_secret" "email_sender_creds" {
 
 
 resource "kubernetes_manifest" "alertmanager_config_global" {
-  depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
-  ]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
     kind       = "AlertmanagerConfig"
@@ -356,7 +341,7 @@ resource "kubernetes_manifest" "alertmanager_config_global" {
         name = local.alertmanager_global_config_name
       }
       name      = local.alertmanager_global_config_name
-      namespace = var.namespace_name
+      namespace = kubernetes_namespace.monitoring.metadata[0].name
     }
     spec = {
       receivers = [
@@ -372,9 +357,6 @@ resource "kubernetes_manifest" "alertmanager_config_global" {
 }
 
 resource "kubernetes_manifest" "alertmanager_config" {
-  depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
-  ]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
     kind       = "AlertmanagerConfig"
@@ -383,7 +365,7 @@ resource "kubernetes_manifest" "alertmanager_config" {
         name = local.alertmanager_config_name
       }
       name      = local.alertmanager_config_name
-      namespace = var.namespace_name
+      namespace = kubernetes_namespace.monitoring.metadata[0].name
     }
     spec = {
       inhibitRules = [
@@ -493,9 +475,8 @@ resource "kubernetes_manifest" "alertmanager_config" {
   }
 }
 
-resource "kubernetes_manifest" "kube_prometheus_setup_remaining" {
+resource "kubernetes_manifest" "kube_prometheus_setup" {
   depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
     kubernetes_manifest.alertmanager_config,
   ]
   for_each = {
@@ -519,8 +500,7 @@ resource "kubernetes_manifest" "kube_prometheus_setup_remaining" {
 
 resource "kubernetes_manifest" "kube_prometheus" {
   depends_on = [
-    kubernetes_manifest.kube_prometheus_setup_namespaces,
-    kubernetes_manifest.kube_prometheus_setup_remaining,
+    kubernetes_manifest.kube_prometheus_setup,
   ]
   for_each = {
     for manifest in flatten([
@@ -565,7 +545,7 @@ resource "kubernetes_manifest" "kube_prometheus" {
 resource "helm_release" "loki" {
   chart      = "loki-distributed"
   name       = "loki"
-  namespace  = var.namespace_name
+  namespace  = kubernetes_namespace.monitoring.metadata[0].name
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
@@ -590,7 +570,7 @@ resource "helm_release" "loki" {
 resource "helm_release" "tempo" {
   chart      = "tempo-distributed"
   name       = "tempo"
-  namespace  = var.namespace_name
+  namespace  = kubernetes_namespace.monitoring.metadata[0].name
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
@@ -706,7 +686,7 @@ resource "kubernetes_persistent_volume" "mimir_volumes" {
     }
     claim_ref {
       name      = each.value.pvc_name
-      namespace = var.namespace_name
+      namespace = kubernetes_namespace.monitoring.metadata[0].name
     }
     node_affinity {
       required {
@@ -737,7 +717,7 @@ resource "helm_release" "mimir" {
   ]
   chart      = "mimir-distributed"
   name       = "mimir"
-  namespace  = var.namespace_name
+  namespace  = kubernetes_namespace.monitoring.metadata[0].name
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
@@ -1031,7 +1011,7 @@ resource "kubernetes_manifest" "vpas" {
     : join(",", [
       "apiVersion=${vpa_config.apiVersion}",
       "kind=${vpa_config.kind}",
-      "namespace=${var.namespace_name}",
+      "namespace=${kubernetes_namespace.monitoring.metadata[0].name}",
       "name=${vpa_config.name}",
     ])
     => vpa_config
@@ -1040,7 +1020,7 @@ resource "kubernetes_manifest" "vpas" {
     apiVersion = "autoscaling.k8s.io/v1"
     kind       = "VerticalPodAutoscaler"
     metadata = {
-      namespace = var.namespace_name
+      namespace = kubernetes_namespace.monitoring.metadata[0].name
       name      = "${lower(each.value.kind)}-${each.value.name}"
     }
     spec = {
