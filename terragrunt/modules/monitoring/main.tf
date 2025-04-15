@@ -289,7 +289,7 @@ data "external" "kube_prometheus_prepare_manifests" {
       { 'kube-prometheus-prometheusRule': kp.kubePrometheus.prometheusRule } +
       { ['alertmanager-' + name]: kp.alertmanager[name] for name in std.objectFields(kp.alertmanager) } +
       { ['blackbox-exporter-' + name]: kp.blackboxExporter[name] for name in std.objectFields(kp.blackboxExporter) } +
-      { ['grafana-' + name]: kp.grafana[name] for name in std.objectFields(kp.grafana) } +
+      // { ['grafana-' + name]: kp.grafana[name] for name in std.objectFields(kp.grafana) } +
       // { ['pyrra-' + name]: kp.pyrra[name] for name in std.objectFields(kp.pyrra) if name != 'crd' } +
       { ['kube-state-metrics-' + name]: kp.kubeStateMetrics[name] for name in std.objectFields(kp.kubeStateMetrics) } +
       { ['kubernetes-' + name]: kp.kubernetesControlPlane[name] for name in std.objectFields(kp.kubernetesControlPlane) }
@@ -554,19 +554,6 @@ resource "helm_release" "loki" {
   version = var.loki_distributed_helm_chart_version
 }
 
-# Grafana is bundled with kube-prometheus... :/
-# resource "helm_release" "grafana" {
-#   chart      = "grafana"
-#   name       = "grafana"
-#   namespace  = var.namespace_name
-#   repository = "https://grafana.github.io/helm-charts"
-#   values = [
-#     yamlencode({
-#     })
-#   ]
-#   version = var.grafana_helm_chart_version
-# }
-
 resource "helm_release" "tempo" {
   chart      = "tempo-distributed"
   name       = "tempo"
@@ -764,6 +751,21 @@ resource "helm_release" "mimir" {
     })
   ]
   version = var.mimir_distributed_helm_chart_version
+}
+
+resource "helm_release" "grafana" {
+  chart      = "grafana"
+  name       = "grafana"
+  namespace  = kubernetes_namespace.monitoring.metadata[0].name
+  repository = "https://grafana.github.io/helm-charts"
+  values = [
+    yamlencode({
+      env = {
+        TZ = "America/Los_Angeles"
+      }
+    })
+  ]
+  version = var.grafana_helm_chart_version
 }
 
 # Create a VPA (with mode: "Off") for each workload.
