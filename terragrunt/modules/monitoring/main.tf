@@ -202,6 +202,12 @@ data "external" "kube_prometheus_prepare_manifests" {
                     },
                   },
                 ],
+                remoteWrite+: [
+                  {
+                    name: 'mimir',
+                    url: 'http://mimir-nginx:80/api/v1/push',
+                  },
+                ],
                 replicas: 1,
                 // This is needed to make the VPA happy.
                 shards: 1,
@@ -549,6 +555,13 @@ resource "helm_release" "loki" {
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
+      loki = {
+        structuredConfig = {
+          limits_config = {
+            volume_enabled = true
+          }
+        }
+      }
     })
   ]
   version = var.loki_distributed_helm_chart_version
@@ -760,6 +773,51 @@ resource "helm_release" "grafana" {
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
+      datasources = {
+        "datasources.yaml" = {
+          apiVersion = 1
+          datasources = [
+            {
+              editable  = false,
+              isDefault = false
+              name      = "Loki",
+              type      = "loki",
+              uid       = "loki"
+              url       = "http://loki-loki-distributed-gateway:80"
+            },
+            {
+              editable  = false,
+              isDefault = true
+              name      = "Mimir",
+              type      = "prometheus",
+              uid       = "mimir"
+              url       = "http://mimir-nginx:80/prometheus"
+            },
+            {
+              editable  = false,
+              isDefault = false
+              jsonData = {
+                lokiSearch = {
+                  datasourceUid = "loki"
+                }
+                tracesToLogsV2 = {
+                  datasourceUid = "loki"
+                }
+                tracesToMetrics = {
+                  datasourceUid = "mimir"
+                }
+                serviceMap = {
+                  datasourceUid = "mimir"
+                }
+              }
+              name = "Tempo",
+              type = "tempo",
+              uid  = "tempo"
+              url  = "http://tempo-query-frontend:3100"
+            },
+          ]
+        }
+      }
       env = {
         TZ = "America/Los_Angeles"
       }
