@@ -783,6 +783,24 @@ resource "helm_release" "mimir" {
   version = var.mimir_distributed_helm_chart_version
 }
 
+locals {
+  grafana_dashboard_filenames = fileset("${path.module}/grafana-dashboards", "*.json")
+}
+
+resource "kubernetes_config_map" "grafana_dashboards" {
+  metadata {
+    namespace = var.namespace_name
+    name      = "grafana-dashboards"
+  }
+  data = {
+    for filename in local.grafana_dashboard_filenames :
+    (filename) => file("${path.module}/grafana-dashboards/${filename}")
+  }
+}
+
+locals {
+  dashboard_provider_name = "kubernetes-config-maps"
+}
 resource "helm_release" "grafana" {
   chart      = "grafana"
   name       = "grafana"
@@ -790,6 +808,27 @@ resource "helm_release" "grafana" {
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
+      dashboardProviders = {
+        "dashboardproviders.yaml" = {
+          apiVersion = 1
+          providers = [
+            {
+              disableDeletion = true
+              editable        = false
+              folder          = ""
+              name            = local.dashboard_provider_name
+              options = {
+                path = "/var/lib/grafana/dashboards/${local.dashboard_provider_name}"
+              }
+              type = "file"
+            }
+          ]
+        }
+      }
+      dashboardsConfigMaps = {
+        (local.dashboard_provider_name) = "grafana-dashboards"
+      }
+      # Based on https://github.com/grafana/helm-charts/blob/main/charts/lgtm-distributed/values.yaml
       datasources = {
         "datasources.yaml" = {
           apiVersion = 1

@@ -1,14 +1,17 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: check-added-large-files
       - id: check-yaml
       - id: detect-private-key
       - id: end-of-file-fixer
-      - id: pretty-format-json
+      - args:
+          - --indent
+          - "4"
+        id: pretty-format-json
       - id: trailing-whitespace
   - repo: https://github.com/AleksaC/terraform-py
-    rev: v1.9.0
+    rev: v1.11.4
     hooks:
       - id: tf-fmt
