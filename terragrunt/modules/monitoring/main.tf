@@ -488,12 +488,12 @@ resource "kubernetes_manifest" "kube_prometheus_setup" {
   for_each = {
     for manifest in [
       for _manifest in [
-        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*")
-        : yamldecode(file("${path.module}/${file_path}"))
-      ]
-      : _manifest if !contains(["CustomResourceDefinition", "Namespace"], _manifest.kind)
-    ]
-    : join(",", compact([
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_setup_path, path.module, "./")}/*") :
+        yamldecode(file("${path.module}/${file_path}"))
+      ] :
+      _manifest if !contains(["CustomResourceDefinition", "Namespace"], _manifest.kind)
+    ] :
+    join(",", compact([
       "apiVersion=${manifest.apiVersion}",
       "kind=${manifest.kind}",
       try("namespace=${manifest.metadata.namespace}", ""),
@@ -512,18 +512,18 @@ resource "kubernetes_manifest" "kube_prometheus" {
     for manifest in flatten([
       # Some of the files contain "List" aggregate resources that do not exist in the Kubernetes API. Split them.
       for _manifest in [
-        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_path, path.module, "./")}/*")
-        : yamldecode(file("${path.module}/${file_path}"))
-      ]
+        for file_path in fileset(path.module, "${replace(data.external.kube_prometheus_prepare_manifests.result.manifests_path, path.module, "./")}/*") :
+        yamldecode(file("${path.module}/${file_path}"))
+      ] :
       # This is the most sensible way, but Terraform throws "Inconsistent conditional result types".
-      # : (
+      # (
       #   endswith(_manifest.kind, "List")
       #   ? _manifest.items
       #   : [_manifest]
       # )
-      : lookup(_manifest, "items", [_manifest])
-    ])
-    : join(",", compact([
+      lookup(_manifest, "items", [_manifest])
+    ]) :
+    join(",", compact([
       "apiVersion=${manifest.apiVersion}",
       "kind=${manifest.kind}",
       try("namespace=${manifest.metadata.namespace}", ""),
@@ -542,8 +542,8 @@ resource "kubernetes_manifest" "kube_prometheus" {
       can(each.value.stringData) ? "stringData" : "",
     ]),
     [
-      for v in range(0, length(try(each.value.spec.template.spec.containers[0].volumeMounts, [])), 1)
-      : "spec.template.spec.containers[0].volumeMounts[${v}].readOnly"
+      for v in range(0, length(try(each.value.spec.template.spec.containers[0].volumeMounts, [])), 1) :
+      "spec.template.spec.containers[0].volumeMounts[${v}].readOnly"
     ],
   )
 }
@@ -590,6 +590,18 @@ data "http" "mimir_distributed_helm_chart_default_values" {
 
 locals {
   mimir_distributed_helm_chart_default_values = yamldecode(data.http.mimir_distributed_helm_chart_default_values.response_body)
+  mimir = {
+    ingester_zone_aware_replication_enabled = (
+      var.mimir_zone_aware_replication != null
+      ? var.mimir_zone_aware_replication
+      : local.mimir_distributed_helm_chart_default_values.ingester.zoneAwareReplication.enabled
+    )
+    store_gateway_zone_aware_replication_enabled = (
+      var.mimir_zone_aware_replication != null
+      ? var.mimir_zone_aware_replication
+      : local.mimir_distributed_helm_chart_default_values.store_gateway.zoneAwareReplication.enabled
+    )
+  }
   mimir_volumes = concat(
     [
       {
@@ -598,45 +610,55 @@ locals {
         pv_name          = "mimir-minio"
         pvc_name         = "mimir-minio"
       },
+    ],
+    [
+      for replica in range(local.mimir_distributed_helm_chart_default_values.alertmanager.replicas) :
       {
         default_capacity = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-alertmanager-0"
-        pv_name          = "storage-mimir-alertmanager-0"
-        pvc_name         = "storage-mimir-alertmanager-0"
-      },
+        host_path        = "/mnt/storage-mimir-alertmanager-${replica}"
+        pv_name          = "storage-mimir-alertmanager-${replica}"
+        pvc_name         = "storage-mimir-alertmanager-${replica}"
+      }
+    ],
+    [
+      for replica in range(local.mimir_distributed_helm_chart_default_values.compactor.replicas) :
       {
         default_capacity = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-compactor-0"
-        pv_name          = "storage-mimir-compactor-0"
-        pvc_name         = "storage-mimir-compactor-0"
-      },
-    ],
-    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
-    ? [
-      for zone in ["a", "b", "c"]
-      : {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-ingester-zone-${zone}-0"
-        pv_name          = "storage-mimir-ingester-zone-${zone}-0"
-        pvc_name         = "storage-mimir-ingester-zone-${zone}-0"
+        host_path        = "/mnt/storage-mimir-compactor-${replica}"
+        pv_name          = "storage-mimir-compactor-${replica}"
+        pvc_name         = "storage-mimir-compactor-${replica}"
       }
-    ]
+    ],
+    local.mimir.ingester_zone_aware_replication_enabled
+    ? flatten([
+      for zone in local.mimir_distributed_helm_chart_default_values.ingester.zoneAwareReplication.zones :
+      [
+        for replica in range(ceil(var.mimir_ingester_replicas != null ? var.mimir_ingester_replicas : local.mimir_distributed_helm_chart_default_values.ingester.replicas) / 3) :
+        {
+          default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
+          host_path        = "/mnt/storage-mimir-ingester-${zone.name}-${replica}"
+          pv_name          = "storage-mimir-ingester-${zone.name}-${replica}"
+          pvc_name         = "storage-mimir-ingester-${zone.name}-${replica}"
+        }
+      ]
+    ])
     : [
+      for replica in range(var.mimir_ingester_replicas != null ? var.mimir_ingester_replicas : local.mimir_distributed_helm_chart_default_values.ingester.replicas) :
       {
         default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-ingester-0"
-        pv_name          = "storage-mimir-ingester-0"
-        pvc_name         = "storage-mimir-ingester-0"
-      },
+        host_path        = "/mnt/storage-mimir-ingester-${replica}"
+        pv_name          = "storage-mimir-ingester-${replica}"
+        pvc_name         = "storage-mimir-ingester-${replica}"
+      }
     ],
-    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+    local.mimir.store_gateway_zone_aware_replication_enabled
     ? [
-      for zone in ["a", "b", "c"]
-      : {
+      for zone in local.mimir_distributed_helm_chart_default_values.store_gateway.zoneAwareReplication.zones :
+      {
         default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-store-gateway-zone-${zone}-0"
-        pv_name          = "storage-mimir-store-gateway-zone-${zone}-0"
-        pvc_name         = "storage-mimir-store-gateway-zone-${zone}-0"
+        host_path        = "/mnt/storage-mimir-store-gateway-${zone.name}-0"
+        pv_name          = "storage-mimir-store-gateway-${zone.name}-0"
+        pvc_name         = "storage-mimir-store-gateway-${zone.name}-0"
       }
     ]
     : [
@@ -652,8 +674,7 @@ locals {
 
 resource "terraform_data" "host_paths" {
   for_each = {
-    for volume in local.mimir_volumes
-    : volume.pvc_name => volume
+    for volume in local.mimir_volumes : volume.pvc_name => volume
   }
   input = {
     host_path = each.value.host_path
@@ -671,8 +692,7 @@ resource "terraform_data" "host_paths" {
 
 resource "kubernetes_persistent_volume" "mimir_volumes" {
   for_each = {
-    for volume in local.mimir_volumes
-    : volume.pvc_name => volume
+    for volume in local.mimir_volumes : volume.pvc_name => volume
   }
   metadata {
     name = each.value.pv_name
@@ -705,9 +725,6 @@ resource "kubernetes_persistent_volume" "mimir_volumes" {
       }
     }
     storage_class_name = var.storage_class_name
-  }
-  lifecycle {
-    prevent_destroy = true
   }
 }
 
@@ -1005,8 +1022,8 @@ locals {
     ],
     (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
     ? [
-      for zone in ["a", "b", "c"]
-      : {
+      for zone in ["a", "b", "c"] :
+      {
         apiVersion = "apps/v1",
         kind       = "StatefulSet",
         name       = "mimir-ingester-zone-${zone}"
@@ -1021,8 +1038,8 @@ locals {
     ],
     (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
     ? [
-      for zone in ["a", "b", "c"]
-      : {
+      for zone in ["a", "b", "c"] :
+      {
         apiVersion = "apps/v1",
         kind       = "StatefulSet",
         name       = "mimir-store-gateway-zone-${zone}"
@@ -1067,14 +1084,13 @@ locals {
 
 resource "kubernetes_manifest" "vpas" {
   for_each = {
-    for vpa_config in local.vpa_configs
-    : join(",", [
+    for vpa_config in local.vpa_configs :
+    join(",", [
       "apiVersion=${vpa_config.apiVersion}",
       "kind=${vpa_config.kind}",
       "namespace=${kubernetes_namespace.monitoring.metadata[0].name}",
       "name=${vpa_config.name}",
-    ])
-    => vpa_config
+    ]) => vpa_config
   }
   manifest = {
     apiVersion = "autoscaling.k8s.io/v1"

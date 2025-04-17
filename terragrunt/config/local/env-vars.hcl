@@ -8,7 +8,7 @@ locals {
   lima_version                         = "v1.0.1"
   loki_distributed_helm_chart_version  = "0.80.2"
   mimir_distributed_helm_chart_version = "5.6.0"
-  mimir_ingester_replicas              = 1
+  mimir_ingester_replicas              = 2
   mimir_querier_replicas               = 1
   mimir_query_scheduler_replicas       = 1
   mimir_zone_aware_replication         = false
