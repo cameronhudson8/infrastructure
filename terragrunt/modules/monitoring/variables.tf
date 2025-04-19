@@ -19,6 +19,16 @@ variable "email_sender_transport" {
   type        = string
 }
 
+variable "env_name" {
+  description = "The name of the environment."
+  type        = string
+}
+
+variable "fluentd_version" {
+  description = "The version of Fluentd to use."
+  type        = string
+}
+
 variable "grafana_helm_chart_version" {
   description = "The version of the grafana helm chart to use"
   type        = string

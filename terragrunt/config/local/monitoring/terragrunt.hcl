@@ -60,6 +60,8 @@ generate "main" {
       email_sender_email_address           = "${get_env("MONITORING_EMAIL_SENDER_EMAIL_ADDRESS")}"
       email_sender_password                = "${get_env("MONITORING_EMAIL_SENDER_PASSWORD")}"
       email_sender_transport               = ${jsonencode(local.global_vars.monitoring_email_sender_transport)}
+      env_name                             = ${jsonencode(local.env_vars.env_name)}
+      fluentd_version                      = ${jsonencode(local.env_vars.fluentd_version)}
       grafana_helm_chart_version           = ${jsonencode(local.env_vars.grafana_helm_chart_version)}
       kube_prometheus_version              = ${jsonencode(local.env_vars.kube_prometheus_version)}
       loki_distributed_helm_chart_version  = ${jsonencode(local.env_vars.loki_distributed_helm_chart_version)}

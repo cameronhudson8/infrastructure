@@ -1,4 +1,6 @@
 locals {
+  env_name                             = "local"
+  fluentd_version                      = "1.18"
   grafana_helm_chart_version           = "8.11.3"
   ingress_nginx_helm_chart_version     = "4.12.0"
   ingress_nginx_service_type           = "NodePort"

@@ -882,6 +882,16 @@ resource "helm_release" "grafana" {
   version = var.grafana_helm_chart_version
 }
 
+module "fluentd" {
+  env_name                   = var.env_name
+  fluentd_version            = var.fluentd_version
+  loki_distributor_name      = "loki-loki-distributed-distributor"
+  loki_distributor_namespace = var.namespace_name
+  loki_distributor_port      = 3100
+  namespace_name             = "kube-system"
+  source                     = "./fluentd"
+}
+
 # Create a VPA (with mode: "Off") for each workload.
 
 # This list was generated manually with the command below.
@@ -929,133 +939,133 @@ locals {
   vpa_configs = concat(
     [
       {
-        apiVersion = "apps/v1",
-        kind       = "DaemonSet",
+        apiVersion = "apps/v1"
+        kind       = "DaemonSet"
         name       = "node-exporter"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "blackbox-exporter"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "grafana"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "kube-state-metrics"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "loki-loki-distributed-distributor"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "loki-loki-distributed-gateway"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "loki-loki-distributed-query-frontend"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-distributor"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-minio"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-nginx"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-overrides-exporter"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-querier"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-query-frontend"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-query-scheduler"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-rollout-operator"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "mimir-ruler"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "prometheus-adapter"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "prometheus-operator"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "tempo-compactor"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "tempo-distributor"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "tempo-querier"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "Deployment",
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
         name       = "tempo-query-frontend"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "loki-loki-distributed-ingester"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "loki-loki-distributed-querier"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-alertmanager"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-compactor"
       },
     ],
@@ -1063,15 +1073,15 @@ locals {
     ? [
       for zone in ["a", "b", "c"] :
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-ingester-zone-${zone}"
       }
     ]
     : [
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-ingester"
       },
     ],
@@ -1079,42 +1089,42 @@ locals {
     ? [
       for zone in ["a", "b", "c"] :
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-store-gateway-zone-${zone}"
       }
     ]
     : [
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "mimir-store-gateway"
       },
     ],
     [
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "tempo-ingester"
       },
       {
-        apiVersion = "apps/v1",
-        kind       = "StatefulSet",
+        apiVersion = "apps/v1"
+        kind       = "StatefulSet"
         name       = "tempo-memcached"
       },
       {
-        apiVersion = "batch/v1",
-        kind       = "Job",
+        apiVersion = "batch/v1"
+        kind       = "Job"
         name       = "mimir-make-minio-buckets-5.3.0"
       },
       {
-        apiVersion = "monitoring.coreos.com/v1",
-        kind       = "Alertmanager",
+        apiVersion = "monitoring.coreos.com/v1"
+        kind       = "Alertmanager"
         name       = "main"
       },
       {
-        apiVersion = "monitoring.coreos.com/v1",
-        kind       = "Prometheus",
+        apiVersion = "monitoring.coreos.com/v1"
+        kind       = "Prometheus"
         name       = "k8s"
       }
     ]
