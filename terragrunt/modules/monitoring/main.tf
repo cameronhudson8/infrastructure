@@ -141,8 +141,8 @@ data "external" "kube_prometheus_prepare_manifests" {
                     name: 'config-reloader',
                     resources+: {
                       limits+: {
-                        // VPA upperBound recommendation
-                        cpu: '41m',
+                        // Manually set. VPA upperBound recommendation was 12m.
+                        cpu: '128',
                       },
                       requests+: {
                         // VPA target recommendation
@@ -175,6 +175,19 @@ data "external" "kube_prometheus_prepare_manifests" {
                             },
                           },
                         }
+                        else if container.name == 'kube-rbac-proxy'
+                        then container + {
+                          resources+: {
+                            limits+: {
+                              // VPA upperBound recommendation
+                              cpu: '167m',
+                            },
+                            requests+: {
+                              // VPA target recommendation
+                              cpu: '11m',
+                            },
+                          },
+                        }
                         else container
                       ) for container in super.containers
                     ],
@@ -192,8 +205,8 @@ data "external" "kube_prometheus_prepare_manifests" {
                     name: 'config-reloader',
                     resources+: {
                       limits+: {
-                        // VPA upperBound recommendation
-                        cpu: '41m',
+                        // Manually set. VPA upperBound recommendation was 12m.
+                        cpu: '128m',
                       },
                       requests+: {
                         // VPA target recommendation
@@ -214,21 +227,7 @@ data "external" "kube_prometheus_prepare_manifests" {
               },
             },
           },
-          values+:: {
-            blackboxExporter+: {
-              kubeRbacProxy+: {
-                resources+: {
-                  limits+: {
-                    // VPA upperBound recommendation
-                    cpu: '167m',
-                  },
-                  requests+: {
-                    // VPA target recommendation
-                    cpu: '11m',
-                  },
-                },
-              },
-            },
+          values+: {
             common+: {
               // Use var.namespace_name here, so that manifest preparation can proceed
               // before the namespace has been created.
