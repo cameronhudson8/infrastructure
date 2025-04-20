@@ -39,7 +39,8 @@ generate "main" {
   if_exists = "overwrite_terragrunt"
   contents  = <<-EOF
     module "storage_classes" {
-      source = "../../../modules/storage-classes-local"
+      source             = "../../../modules/storage-classes-local"
+      storage_class_name = ${jsonencode(local.env_vars.storage_class_name)}
     }
   EOF
 }

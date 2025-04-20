@@ -39,7 +39,7 @@ resource "terraform_data" "cluster" {
     command = <<-EOF
       function create_vm {
           limactl create 'https://raw.githubusercontent.com/lima-vm/lima/refs/tags/${self.input.lima_version}/templates/k8s.yaml' \
-              --cpus 2 \
+              --cpus 4 \
               --disk 20 \
               --memory 8 \
               --name '${self.input.vm_name}' \
