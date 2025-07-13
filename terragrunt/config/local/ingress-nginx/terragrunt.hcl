@@ -3,8 +3,8 @@ include "backend" {
 }
 
 locals {
-  env_vars    = read_terragrunt_config(find_in_parent_folders("env-vars.hcl")).locals
-  global_vars = read_terragrunt_config(find_in_parent_folders("global-vars.hcl")).locals
+  env_vars    = jsondecode(read_tfvars_file(find_in_parent_folders("env.tfvars")))
+  global_vars = jsondecode(read_tfvars_file(find_in_parent_folders("global.tfvars")))
 }
 
 generate "terraform" {
