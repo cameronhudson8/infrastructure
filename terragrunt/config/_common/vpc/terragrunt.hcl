@@ -1,13 +1,15 @@
-local {
+locals {
   env_vars    = jsondecode(read_tfvars_file(find_in_parent_folders("env.tfvars")))
   global_vars = jsondecode(read_tfvars_file(find_in_parent_folders("global.tfvars")))
 }
 
 generate "backend" {
   contents = <<-EOF
-    backend "gcs" {
-        bucket  = "${env_vars.tf_state_bucket_name}"
+    terraform {
+      backend "gcs" {
+        bucket  = "${local.env_vars.tf_state_bucket_name}"
         prefix  = "repositories/infrastructure/modules/${basename(get_original_terragrunt_dir())}"
+      }
     }
   EOF
   if_exists = "overwrite_terragrunt"
@@ -39,4 +41,15 @@ generate "providers" {
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "providers.tf"
+}
+
+generate "main" {
+  contents = <<-EOF
+    module "vpc" {
+      region  = "${local.env_vars.gcp_region}"
+      source  = "${find_in_parent_folders("modules")}/vpc"
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "main.tf"
 }

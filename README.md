@@ -2,7 +2,7 @@
 
 Terraform code for creating local and cloud infrastructure where applications are deployed.
 
-## Planned Architecture
+## Architecture
 
 ![architecture](./docs/architecture.drawio.svg)
 
