@@ -34,7 +34,7 @@ terragrunt apply --working-dir ./terragrunt/<module>
 ```
 Modules:
 1. `vpc`
-1. (TBD) `cluster`
+1. `cluster`
 1. In-cluster services
     * (TBD) `vpn`
     * `ingress-nginx`

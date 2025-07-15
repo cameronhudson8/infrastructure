@@ -1,0 +1,53 @@
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+locals {
+  env_vars    = jsondecode(read_tfvars_file(find_in_parent_folders("env.tfvars")))
+  global_vars = jsondecode(read_tfvars_file(find_in_parent_folders("global.tfvars")))
+}
+
+generate "terraform" {
+  contents  = <<-EOF
+    terraform {
+      required_providers {
+        google = {
+          source  = "hashicorp/google"
+          version = "~> 6.0"
+        }
+      }
+      required_version = "~> 1.0"
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "terraform.tf"
+}
+
+generate "providers" {
+  contents  = <<-EOF
+    provider "google" {
+      project = "${local.env_vars.gcp_project_id}"
+      region  = "${local.env_vars.gcp_region}"
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "providers.tf"
+}
+
+generate "main" {
+  contents  = <<-EOF
+    module "kubernetes_cluster" {
+      gcp_project_id                                  = ${jsonencode(local.env_vars.gcp_project_id)}
+      gcp_region                                      = ${jsonencode(local.env_vars.gcp_region)}
+      kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
+      kubernetes_cluster_subnet_name                  = ${jsonencode(dependency.vpc.outputs.kubernetes_cluster_subnet_name)}
+      kubernetes_pods_subnet_secondary_range_name     = ${jsonencode(dependency.vpc.outputs.kubernetes_pods_subnet_secondary_range_name)}
+      kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
+      on_demand_node_machine_type                     = ${jsonencode(local.env_vars.on_demand_node_machine_type)}
+      source                                          = "${find_in_parent_folders("modules")}/kubernetes-cluster"
+      vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "main.tf"
+}
