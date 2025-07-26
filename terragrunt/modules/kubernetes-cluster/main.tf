@@ -53,6 +53,34 @@ resource "google_container_cluster" "main" {
   subnetwork               = var.kubernetes_cluster_subnet_name
 }
 
+# Determine which zones have the desired machine type available.
+data "google_compute_machine_types" "available_machine_types" {
+  for_each = toset(data.google_compute_zones.available.names)
+  filter   = "name = \"${var.on_demand_node_machine_type}\""
+  zone     = each.value
+}
+
+locals {
+  zones_with_on_demand_machine_type_available = sort([
+    for zone, available_machine_types in data.google_compute_machine_types.available_machine_types :
+    zone if contains(
+      [for machine_types in available_machine_types.machine_types : machine_types.name],
+      var.on_demand_node_machine_type,
+    )
+  ])
+
+  node_distribution = [
+    for i, zone_name in local.zones_with_on_demand_machine_type_available :
+    {
+      node_count = (
+        floor(var.on_demand_node_count / length(local.zones_with_on_demand_machine_type_available))
+        + (i < (var.on_demand_node_count % length(local.zones_with_on_demand_machine_type_available)) ? 1 : 0)
+      )
+      zone_name = zone_name
+    }
+  ]
+}
+
 resource "google_container_node_pool" "on_demand_nodes" {
   for_each = {
     for zone in local.node_distribution :
@@ -63,15 +91,15 @@ resource "google_container_node_pool" "on_demand_nodes" {
   name    = "on-demand-${each.value.zone_name}"
   network_config {
     enable_private_nodes = true
-    pod_range            = var.kubernetes_pods_subnet_secondary_range_name
   }
   node_config {
-    labels          = { preemptible = "false" }
+    # Non-preemptible nodes receive the label "goog-gke-node-pool-provisioning-model: on-demand"
+    # labels          = {}
     machine_type    = var.on_demand_node_machine_type
     service_account = google_service_account.nodes.email
   }
-  node_count     = 1
-  node_locations = slice(sort(data.google_compute_zones.available.names), 0, 3)
+  node_count     = each.value.node_count
+  node_locations = [each.value.zone_name]
   management {
     auto_repair  = true
     auto_upgrade = true

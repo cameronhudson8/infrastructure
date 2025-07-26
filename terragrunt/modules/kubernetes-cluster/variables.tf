@@ -28,6 +28,12 @@ variable "kubernetes_services_subnet_secondary_range_name" {
   type        = string
 }
 
+variable "on_demand_node_count" {
+  default     = 3
+  description = "The number of on-demand nodes to create"
+  type        = number
+}
+
 variable "on_demand_node_machine_type" {
   description = "The machine type for the on-demand nodes"
   type        = string
