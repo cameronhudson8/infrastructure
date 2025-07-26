@@ -22,8 +22,3 @@ variable "kubernetes_services_ipv4_cidr" {
   description = "The CIDR to use for Kubernetes Services."
   type        = string
 }
-
-variable "public_subnet_ipv4_cidr" {
-  description = "The CIDR to use for the public subnet."
-  type        = string
-}
