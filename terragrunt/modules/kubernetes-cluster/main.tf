@@ -42,7 +42,13 @@ resource "google_container_cluster" "main" {
     stack_type                    = "IPV4_IPV6"
   }
   location = sort(data.google_compute_zones.available.names)[0]
-  master_authorized_networks_config {}
+  master_authorized_networks_config {
+    cidr_blocks {
+      display_name = "All IPv4 addresses"
+      cidr_block   = "0.0.0.0/0"
+    }
+    gcp_public_cidrs_access_enabled = true
+  }
   name            = local.cluster_name
   network         = var.vpc_name
   networking_mode = "VPC_NATIVE"
