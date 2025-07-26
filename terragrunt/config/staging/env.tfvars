@@ -8,13 +8,12 @@
 # ++ (Reserved) "Broadcast address" |  10.127.255.255/32 | 10.127.255.255 | 2 ^ 0
 
 # I currently only have 1 GCP project. Reconsider later.
-gcp_project_id                   = "cameronhudson8"
-gcp_region                       = "us-central1"
-ingress_nginx_helm_chart_version = "4.12.0"
-ingress_nginx_service_type       = "LoadBalancer"
-kube_prometheus_version          = "v0.14.0"
-# kubernetes_control_plane_ipv4_cidr = "10.255.255.224/28"
-kubernetes_control_plane_ipv4_cidr = "172.16.0.16/28"
+gcp_project_id                     = "cameronhudson8"
+gcp_region                         = "us-central1"
+ingress_nginx_helm_chart_version   = "4.12.0"
+ingress_nginx_service_type         = "LoadBalancer"
+kube_prometheus_version            = "v0.14.0"
+kubernetes_control_plane_ipv4_cidr = "10.255.255.224/28"
 # kubernetes_nodes_ipv4_cidr         = "10.192.0.0/11"
 kubernetes_nodes_ipv4_cidr = "192.168.0.0/20"
 # kubernetes_pods_ipv4_cidr          = "10.0.0.0/9"
