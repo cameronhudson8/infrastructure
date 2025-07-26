@@ -28,6 +28,7 @@ resource "google_container_cluster" "main" {
   depends_on = [
     google_project_iam_member.nodes,
   ]
+  enable_l4_ilb_subsetting = true
   lifecycle {
     ignore_changes = [node_config]
   }
@@ -38,7 +39,7 @@ resource "google_container_cluster" "main" {
   ip_allocation_policy {
     cluster_secondary_range_name  = var.kubernetes_pods_subnet_secondary_range_name
     services_secondary_range_name = var.kubernetes_services_subnet_secondary_range_name
-    # stack_type                    = "IPV4_IPV6"
+    stack_type                    = "IPV4_IPV6"
   }
   location = sort(data.google_compute_zones.available.names)[0]
   master_authorized_networks_config {}
