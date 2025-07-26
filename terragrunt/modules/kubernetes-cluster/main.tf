@@ -56,6 +56,10 @@ resource "google_container_cluster" "main" {
     enable_private_nodes   = true
     master_ipv4_cidr_block = var.kubernetes_control_plane_ipv4_cidr
   }
+  # Enabling this results in the absurd error "Error: googleapi: Error 400:
+  # Setting stack_type IPV4_IPV6 is not supported when private ipv6 google
+  # access is enabled."
+  # private_ipv6_google_access = "PRIVATE_IPV6_GOOGLE_ACCESS_BIDIRECTIONAL"
   remove_default_node_pool = true
   subnetwork               = var.kubernetes_cluster_subnet_name
 }
