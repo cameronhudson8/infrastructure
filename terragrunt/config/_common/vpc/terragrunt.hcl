@@ -3,21 +3,8 @@ locals {
   global_vars = jsondecode(read_tfvars_file(find_in_parent_folders("global.tfvars")))
 }
 
-generate "backend" {
-  contents = <<-EOF
-    terraform {
-      backend "gcs" {
-        bucket  = "${local.env_vars.tf_state_bucket_name}"
-        prefix  = "repositories/infrastructure/modules/${basename(get_original_terragrunt_dir())}"
-      }
-    }
-  EOF
-  if_exists = "overwrite_terragrunt"
-  path      = "backend.tf"
-}
-
 generate "terraform" {
-  contents = <<-EOF
+  contents  = <<-EOF
     terraform {
       required_providers {
         google = {
@@ -33,7 +20,7 @@ generate "terraform" {
 }
 
 generate "providers" {
-  contents = <<-EOF
+  contents  = <<-EOF
     provider "google" {
       project = "${local.env_vars.gcp_project_id}"
       region  = "${local.env_vars.gcp_region}"
@@ -44,12 +31,42 @@ generate "providers" {
 }
 
 generate "main" {
-  contents = <<-EOF
+  contents  = <<-EOF
     module "vpc" {
-      region  = "${local.env_vars.gcp_region}"
-      source  = "${find_in_parent_folders("modules")}/vpc"
+      gcp_region                         = "${local.env_vars.gcp_region}"
+      kubernetes_control_plane_ipv4_cidr = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
+      kubernetes_nodes_ipv4_cidr         = ${jsonencode(local.env_vars.kubernetes_nodes_ipv4_cidr)}
+      kubernetes_pods_ipv4_cidr          = ${jsonencode(local.env_vars.kubernetes_pods_ipv4_cidr)}
+      kubernetes_services_ipv4_cidr      = ${jsonencode(local.env_vars.kubernetes_services_ipv4_cidr)}
+      source                             = "${find_in_parent_folders("modules")}/vpc"
     }
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "main.tf"
+}
+
+generate "outputs" {
+  contents  = <<-EOF
+    output "kubernetes_cluster_subnet_name" {
+      description = "The name of the subnet to use for the Kubernetes cluster (Nodes, Pods, and Services)"
+      value       = module.vpc.kubernetes_cluster_subnet_name
+    }
+
+    output "kubernetes_pods_subnet_secondary_range_name" {
+      description = "The name of the secondary range of the Kubernetes cluster subnet to use for the Pod IPs"
+      value       = module.vpc.kubernetes_pods_subnet_secondary_range_name
+    }
+
+    output "kubernetes_services_subnet_secondary_range_name" {
+      description = "The name of the secondary range of the Kubernetes cluster subnet to use for the Service IPs"
+      value       = module.vpc.kubernetes_services_subnet_secondary_range_name
+    }
+
+    output "vpc_name" {
+      description = "The name of the VPC"
+      value       = module.vpc.vpc_name
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "outputs.tf"
 }
