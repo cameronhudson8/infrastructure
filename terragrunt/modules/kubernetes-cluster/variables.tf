@@ -28,16 +28,16 @@ variable "kubernetes_services_subnet_secondary_range_name" {
   type        = string
 }
 
-variable "on_demand_node_count" {
+variable "node_count" {
   default     = 3
-  description = "The number of on-demand nodes to create"
+  description = "The number of nodes to create"
   type        = number
 }
 
-variable "on_demand_node_machine_type" {
-  description = "The machine type for the on-demand nodes"
+variable "node_machine_type" {
+  default     = "e2-small"
+  description = "The machine type of the nodes"
   type        = string
-  default     = "e2-medium"
 }
 
 variable "vpc_name" {
