@@ -3,11 +3,6 @@ variable "gcp_project_id" {
   type        = string
 }
 
-variable "gcp_region" {
-  description = "The GCP region to use."
-  type        = string
-}
-
 variable "kubernetes_cluster_subnet_name" {
   description = "The name of the subnet to use for the Kubernetes nodes"
   type        = string

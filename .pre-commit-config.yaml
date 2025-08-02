@@ -11,7 +11,13 @@ repos:
           - "4"
         id: pretty-format-json
       - id: trailing-whitespace
-  - repo: https://github.com/AleksaC/terraform-py
-    rev: v1.11.4
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.99.5
     hooks:
-      - id: tf-fmt
+      - id: terraform_fmt
+      - id: terraform_tflint
+      # - id: terraform_trivy
+      # - id: terraform_validate
+      # - id: terraform_wrapper_module_for_each
+      # - id: terrascan
+      # - id: tfupdate

@@ -19,11 +19,6 @@ variable "kubernetes_server" {
   type        = string
 }
 
-variable "namespace_name" {
-  description = "The name of the namespace in which to deploy"
-  type        = string
-}
-
 variable "operator_version" {
   description = "The version of the operator to use"
   type        = string
