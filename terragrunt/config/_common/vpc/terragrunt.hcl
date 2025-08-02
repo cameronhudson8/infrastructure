@@ -38,6 +38,7 @@ generate "main" {
       kubernetes_nodes_ipv4_cidr         = ${jsonencode(local.env_vars.kubernetes_nodes_ipv4_cidr)}
       kubernetes_pods_ipv4_cidr          = ${jsonencode(local.env_vars.kubernetes_pods_ipv4_cidr)}
       kubernetes_services_ipv4_cidr      = ${jsonencode(local.env_vars.kubernetes_services_ipv4_cidr)}
+      load_balancers_ipv4_cidr           = ${jsonencode(local.env_vars.load_balancers_ipv4_cidr)}
       source                             = "${find_in_parent_folders("modules")}/vpc"
     }
   EOF

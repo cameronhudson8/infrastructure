@@ -36,11 +36,11 @@ Modules:
 1. `vpc`
 1. `cluster`
 1. In-cluster services
-    * (TBD) `vpn`
+    * (TODO) `vpn`
     * `ingress-nginx`
-    * (TBD) `ci-cd`
-    * (TBD) `identity`
-    * (TBD) `secrets`
+    * (TODO) `ci-cd`
+    * (TODO) `identity`
+    * (TODO) `secrets`
     * Observability
         1. `monitoring-crds`
         1. `monitoring`

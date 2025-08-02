@@ -44,6 +44,7 @@ gcp_project_id                   = "cameronhudson8"
 gcp_region                       = "us-central1"
 ingress_nginx_helm_chart_version = "4.12.0"
 ingress_nginx_service_type       = "LoadBalancer"
+load_balancers_ipv4_cidr         = "10.255.255.248/29"
 node_count                       = 3
 # "e2-standard-2" costs less per CPU and per GB mem, but the smallest size is twice as large as "t2a-standard-1".
 # node_machine_type      = "t2a-standard-1"
