@@ -4,7 +4,7 @@ variable "gcp_region" {
 }
 
 variable "kubernetes_control_plane_ipv4_cidr" {
-  description = "The CIDR to use for the Kubernetes control plane."
+  description = "The IPv4 CIDR to use for the Kubernetes control plane."
   type        = string
 }
 
@@ -14,11 +14,16 @@ variable "kubernetes_nodes_ipv4_cidr" {
 }
 
 variable "kubernetes_pods_ipv4_cidr" {
-  description = "The CIDR to use for Kubernetes Pods."
+  description = "The IPv4 CIDR to use for Kubernetes Pods."
   type        = string
 }
 
 variable "kubernetes_services_ipv4_cidr" {
-  description = "The CIDR to use for Kubernetes Services."
+  description = "The IPv4 CIDR to use for Kubernetes Services."
+  type        = string
+}
+
+variable "load_balancers_ipv4_cidr" {
+  description = "The IPv4 CIDR of the publicly accessible load balancers"
   type        = string
 }

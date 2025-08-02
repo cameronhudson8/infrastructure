@@ -37,13 +37,21 @@
 # + <Unused>                        |  10.255.255.128/26 | 10.255.255.191 | 2 ^ 6
 # + <Unused>                        |  10.255.255.192/27 | 10.255.255.223 | 2 ^ 5
 # + Kubernetes control plane        |  10.255.255.224/28 | 10.255.255.239 | 2 ^ 4
-# + <Unused>                        |  10.255.255.240/28 | 10.255.255.255 | 2 ^ 4
+# + <Unused>                        |  10.255.255.240/29 | 10.255.255.247 | 2 ^ 3
+
+# +  Subnet (Public)                |  10.255.255.248/29 | 10.255.255.255 | 2 ^ 3
+# ++ (Reserved) "Network address"   |  10.255.255.248/32 | 10.255.255.248 | 2 ^ 0
+# ++ (Reserved) "Default gateway"   |  10.255.255.249/32 | 10.255.255.249 | 2 ^ 0
+# ++ Load Balancers                 |                  - | 10.255.255.253 | 2 ^ 3 - 4
+# ++ (Reserved) "For future use"    |  10.255.255.254/32 | 10.255.255.254 | 2 ^ 0
+# ++ (Reserved) "Broadcast address" |  10.255.255.255/32 | 10.255.255.255 | 2 ^ 0
 
 # I currently only have 1 GCP project. Reconsider later.
 gcp_project_id                   = "cameronhudson8"
 gcp_region                       = "us-central1"
 ingress_nginx_helm_chart_version = "4.12.0"
 ingress_nginx_service_type       = "LoadBalancer"
+load_balancers_ipv4_cidr         = "10.255.255.248/29"
 node_count                       = 3
 # "e2-standard-2" costs less per CPU and per GB mem, but the smallest size is twice as large as "t2a-standard-1".
 # node_machine_type      = "t2a-standard-1"
