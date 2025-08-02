@@ -3,11 +3,6 @@ variable "gcp_region" {
   type        = string
 }
 
-variable "kubernetes_control_plane_ipv4_cidr" {
-  description = "The IPv4 CIDR to use for the Kubernetes control plane."
-  type        = string
-}
-
 variable "kubernetes_nodes_ipv4_cidr" {
   description = "The IPv4 CIDR to use for the Kubernetes Nodes."
   type        = string

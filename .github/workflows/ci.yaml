@@ -8,24 +8,10 @@ jobs:
   pr:
     runs-on: ubuntu-latest
     container:
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      image: ubuntu:latest
+      image: ghcr.io/cameronhudson8/pipeline-containers:2025-08-02T21-28-46Z
     steps:
-      - name: Install git
-        run: apt-get install --update -y git
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache local downloads
-        uses: actions/cache@v4
-        with:
-          path: /github/home/.local
-          key: ${{ runner.os }}-python-packages
-      - name: Install dependencies
-        run: |
-          apt-get install --update -y pipx
-          echo "${HOME}/.local/bin" >>"${GITHUB_PATH}"
-          pipx install 'pre-commit==3.*'
       - name: Run pre-commit checks
         run: |
           git config --global --add safe.directory "${PWD}"
