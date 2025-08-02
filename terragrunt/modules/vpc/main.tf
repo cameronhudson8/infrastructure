@@ -27,3 +27,18 @@ resource "google_compute_subnetwork" "main" {
   }
   stack_type = "IPV4_IPV6"
 }
+
+resource "google_compute_router" "main" {
+  name    = "main"
+  network = google_compute_network.main.id
+  region  = var.gcp_region
+}
+
+# This is for IPv4 egress only. The IPv6 addresses in the VPC are not private,
+# so no NAT is needed for egress.
+resource "google_compute_router_nat" "main" {
+  name                               = "main"
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  router                             = google_compute_router.main.name
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+}

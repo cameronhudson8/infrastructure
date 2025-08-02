@@ -39,15 +39,32 @@ generate "main" {
     module "kubernetes_cluster" {
       gcp_project_id                                  = ${jsonencode(local.env_vars.gcp_project_id)}
       gcp_region                                      = ${jsonencode(local.env_vars.gcp_region)}
-      kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
       kubernetes_cluster_subnet_name                  = ${jsonencode(dependency.vpc.outputs.kubernetes_cluster_subnet_name)}
+      kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
       kubernetes_pods_subnet_secondary_range_name     = ${jsonencode(dependency.vpc.outputs.kubernetes_pods_subnet_secondary_range_name)}
       kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
-      on_demand_node_machine_type                     = ${jsonencode(local.env_vars.on_demand_node_machine_type)}
+      node_count                                      = ${jsonencode(local.env_vars.node_count)}
+      node_machine_type                               = ${jsonencode(local.env_vars.node_machine_type)}
       source                                          = "${find_in_parent_folders("modules")}/kubernetes-cluster"
       vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
     }
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "main.tf"
+}
+
+generate "outputs" {
+  contents  = <<-EOF
+    output "control_plane_ca_certificate" {
+      description = "The certificate of the certificate authority that issued the control plane's TLS certificate."
+      value       = module.kubernetes_cluster.control_plane_ca_certificate
+    }
+
+    output "control_plane_endpoint" {
+      description = "The URI at which the cluster's control plane can be reached"
+      value       = module.kubernetes_cluster.control_plane_endpoint
+    }
+  EOF
+  if_exists = "overwrite_terragrunt"
+  path      = "outputs.tf"
 }
