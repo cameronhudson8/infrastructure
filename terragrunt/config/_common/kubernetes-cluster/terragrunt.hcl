@@ -37,8 +37,8 @@ generate "providers" {
 generate "main" {
   contents  = <<-EOF
     module "kubernetes_cluster" {
+      env_name                                        = ${jsonencode(local.env_vars.env_name)}
       gcp_project_id                                  = ${jsonencode(local.env_vars.gcp_project_id)}
-      gcp_region                                      = ${jsonencode(local.env_vars.gcp_region)}
       kubernetes_cluster_subnet_name                  = ${jsonencode(dependency.vpc.outputs.kubernetes_cluster_subnet_name)}
       kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
       kubernetes_pods_subnet_secondary_range_name     = ${jsonencode(dependency.vpc.outputs.kubernetes_pods_subnet_secondary_range_name)}

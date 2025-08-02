@@ -1,0 +1,6 @@
+misconfigurations:
+  - expired_at: "2025-09-09T00:00:00Z"
+    id: AVD-GCP-0053
+    paths:
+      - terragrunt/modules/kubernetes-cluster/main.tf
+    statement: Need VPN first
