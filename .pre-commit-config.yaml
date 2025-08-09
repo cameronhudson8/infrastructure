@@ -12,12 +12,8 @@ repos:
         id: pretty-format-json
       - id: trailing-whitespace
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.99.5
+    rev: v1.100.0
     hooks:
       - id: terraform_fmt
       - id: terraform_tflint
-      # - id: terraform_trivy
-      # - id: terraform_validate
-      # - id: terraform_wrapper_module_for_each
-      # - id: terrascan
-      # - id: tfupdate
+      - id: terraform_trivy

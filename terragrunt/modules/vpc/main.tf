@@ -11,7 +11,10 @@ resource "google_compute_subnetwork" "private" {
   # to allow ingress. Using external IPv6 addresses eliminates the need for
   # NAT66 for egress, which would otherwise be required to translate internal
   # IPv6 addresses to public IPv6 addresses.
-  ipv6_access_type           = "EXTERNAL"
+  ipv6_access_type = "EXTERNAL"
+  log_config {
+    metadata = "INCLUDE_ALL_METADATA"
+  }
   name                       = "private"
   network                    = google_compute_network.main.id
   private_ip_google_access   = true
@@ -29,8 +32,11 @@ resource "google_compute_subnetwork" "private" {
 }
 
 resource "google_compute_subnetwork" "public" {
-  ip_cidr_range              = var.load_balancers_ipv4_cidr
-  ipv6_access_type           = "EXTERNAL"
+  ip_cidr_range    = var.load_balancers_ipv4_cidr
+  ipv6_access_type = "EXTERNAL"
+  log_config {
+    metadata = "INCLUDE_ALL_METADATA"
+  }
   name                       = "public"
   network                    = google_compute_network.main.id
   private_ip_google_access   = true
@@ -95,8 +101,9 @@ resource "google_compute_firewall" "private_ipv6" {
   deny {
     protocol = "all"
   }
-  description        = "Deny all IPv6 ingress from the internet"
-  destination_ranges = [google_compute_subnetwork.private.ipv6_cidr_range]
+  description = "Deny all IPv6 ingress from the internet"
+  # The cidrsubnet function is used to compact ":0:" to "::".
+  destination_ranges = [cidrsubnet(google_compute_subnetwork.private.ipv6_cidr_range, 0, 0)]
   direction          = "INGRESS"
   name               = "deny-ipv6-ingress-from-internet-to-private-subnet"
   network            = google_compute_network.main.name

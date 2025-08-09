@@ -46,6 +46,7 @@
 # ++ (Reserved) "For future use"    |  10.255.255.254/32 | 10.255.255.254 | 2 ^ 0
 # ++ (Reserved) "Broadcast address" |  10.255.255.255/32 | 10.255.255.255 | 2 ^ 0
 
+env_name = "staging"
 # I currently only have 1 GCP project. Reconsider later.
 gcp_project_id                   = "cameronhudson8"
 gcp_region                       = "us-central1"

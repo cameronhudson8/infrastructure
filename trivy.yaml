@@ -1,0 +1,5 @@
+ignorefile: .trivyignore.yaml
+misconfiguration:
+  terraform:
+    vars:
+      - .trivy.tfvars

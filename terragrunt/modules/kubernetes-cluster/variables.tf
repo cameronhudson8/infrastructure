@@ -1,3 +1,8 @@
+variable "env_name" {
+  description = "The name of the environment in which the Kubernetes cluster exists"
+  type        = string
+}
+
 variable "gcp_project_id" {
   description = "The ID of the GCP project"
   type        = string

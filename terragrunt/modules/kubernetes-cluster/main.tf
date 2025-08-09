@@ -51,10 +51,16 @@ resource "google_container_cluster" "main" {
   networking_mode = "VPC_NATIVE"
   node_config {
     service_account = google_service_account.nodes.email
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
   }
   private_cluster_config {
     enable_private_nodes   = true
     master_ipv4_cidr_block = var.kubernetes_control_plane_ipv4_cidr
+  }
+  resource_labels = {
+    env = var.env_name
   }
   # Enabling this results in the absurd error "Error: googleapi: Error 400:
   # Setting stack_type IPV4_IPV6 is not supported when private ipv6 google
@@ -62,6 +68,9 @@ resource "google_container_cluster" "main" {
   # private_ipv6_google_access = "PRIVATE_IPV6_GOOGLE_ACCESS_BIDIRECTIONAL"
   remove_default_node_pool = true
   subnetwork               = var.kubernetes_cluster_subnet_name
+  workload_identity_config {
+    workload_pool = "${var.gcp_project_id}.svc.id.goog"
+  }
 }
 
 data "google_compute_machine_types" "available" {
