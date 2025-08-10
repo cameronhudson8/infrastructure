@@ -64,4 +64,6 @@ kubernetes_pods_ipv4_cidr          = "10.0.0.0/9"
 kubernetes_services_ipv4_cidr      = "10.254.0.0/16"
 kubernetes_version                 = "1.30"
 tf_state_bucket_name               = "cameronhudson8-staging-tf-state"
+vpn_clients_ipv6_prefix_length     = 108
 vpa_operator_version               = "1.2.0"
+wireguard_version                  = "1.0.20250521"
