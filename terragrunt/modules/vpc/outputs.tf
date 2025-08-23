@@ -19,6 +19,21 @@ output "kubernetes_services_subnet_secondary_range_name" {
   ][0].range_name
 }
 
+output "private_subnet_id" {
+  description = "The ID of the private subnet"
+  value       = google_compute_subnetwork.private.id
+}
+
+output "private_subnet_ipv6_cidr" {
+  description = "The IPv6 CIDR of the public subnet"
+  value       = google_compute_subnetwork.private.ipv6_cidr_range
+}
+
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = google_compute_network.main.id
+}
+
 output "vpc_name" {
   description = "The name of the VPC"
   value       = google_compute_network.main.name

@@ -60,4 +60,6 @@ node_pool_main_machine_type        = "e2-standard-2"
 node_pool_vpn_node_count           = 3
 node_pool_vpn_machine_type         = "e2-small"
 tf_state_bucket_name               = "cameronhudson8-prod-tf-state"
+vpn_clients_ipv6_prefix_length     = 108
 vpa_operator_version               = "1.2.0"
+wireguard_version                  = "1.0.20250521"

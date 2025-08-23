@@ -152,6 +152,12 @@ resource "google_container_node_pool" "main" {
   node_locations = [each.value.zone_name]
 }
 
+locals {
+  wireguard_node_labels = {
+    wireguard = "true"
+  }
+}
+
 # These Ubuntu nodes will be used for VPN pods, which need a particular
 # WireGuard kernel module installed for that's not available in the
 # default ContainerOS.
@@ -168,6 +174,7 @@ resource "google_container_node_pool" "vpn" {
   }
   node_config {
     image_type      = "ubuntu_containerd"
+    labels          = local.wireguard_node_labels
     machine_type    = each.value.machine_type
     preemptible     = true
     service_account = google_service_account.nodes.email

@@ -62,6 +62,21 @@ generate "outputs" {
       value       = module.vpc.kubernetes_services_subnet_secondary_range_name
     }
 
+    output "private_subnet_id" {
+      description = "The ID of the private subnet"
+      value       = module.vpc.private_subnet_id
+    }
+
+    output "private_subnet_ipv6_cidr" {
+      description = "The IPv6 CIDR of the private subnet"
+      value       = module.vpc.private_subnet_ipv6_cidr
+    }
+
+    output "vpc_id" {
+      description = "The ID of the VPC"
+      value        = module.vpc.vpc_id
+    }
+
     output "vpc_name" {
       description = "The name of the VPC"
       value       = module.vpc.vpc_name

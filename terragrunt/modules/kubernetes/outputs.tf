@@ -7,3 +7,8 @@ output "node_service_account_name" {
   description = "The name of the GCP service account assigned to the Kubernetes nodes"
   value       = google_service_account.nodes.name
 }
+
+output "wireguard_node_labels" {
+  description = "The node labels that indicate where the WireGuard VPN pods should run"
+  value       = local.wireguard_node_labels
+}

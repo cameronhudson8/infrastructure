@@ -68,6 +68,11 @@ generate "outputs" {
       description = "The name of the GCP service account assigned to the Kubernetes nodes"
       value       = module.kubernetes.node_service_account_name
     }
+
+    output "wireguard_node_labels" {
+      description = "The node labels that indicate where the WireGuard VPN pods should run"
+      value       = module.kubernetes_cluster.wireguard_node_labels
+    }
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "outputs.tf"
