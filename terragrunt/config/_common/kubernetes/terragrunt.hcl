@@ -45,8 +45,10 @@ generate "main" {
       kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
       kubernetes_pods_subnet_secondary_range_name     = ${jsonencode(dependency.vpc.outputs.kubernetes_pods_subnet_secondary_range_name)}
       kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
-      node_count                                      = ${jsonencode(local.env_vars.node_count)}
-      node_machine_type                               = ${jsonencode(local.env_vars.node_machine_type)}
+      node_pool_main_node_count                       = ${jsonencode(local.env_vars.node_pool_main_node_count)}
+      node_pool_main_machine_type                     = ${jsonencode(local.env_vars.node_pool_main_machine_type)}
+      node_pool_vpn_node_count                        = ${jsonencode(local.env_vars.node_pool_vpn_node_count)}
+      node_pool_vpn_machine_type                      = ${jsonencode(local.env_vars.node_pool_vpn_machine_type)}
       source                                          = "${find_in_parent_folders("modules")}/kubernetes"
       vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
     }

@@ -38,15 +38,23 @@ variable "kubernetes_services_subnet_secondary_range_name" {
   type        = string
 }
 
-variable "node_count" {
-  default     = 3
-  description = "The number of nodes to create"
+variable "node_pool_main_node_count" {
+  description = "The number of nodes in the main node pool (which runs everything except VPN)"
   type        = number
 }
 
-variable "node_machine_type" {
-  default     = "e2-small"
-  description = "The machine type of the nodes"
+variable "node_pool_main_machine_type" {
+  description = "The machine type of the nodes in the main node pool (which runs everything except VPN)"
+  type        = string
+}
+
+variable "node_pool_vpn_node_count" {
+  description = "The number of nodes in the VPN node pool (which runs only the VPN pods)"
+  type        = number
+}
+
+variable "node_pool_vpn_machine_type" {
+  description = "The machine type of the nodes in the VPN node pool (which runs only the VPN pods)"
   type        = string
 }
 

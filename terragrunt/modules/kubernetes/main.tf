@@ -88,36 +88,55 @@ resource "google_container_cluster" "main" {
 
 data "google_compute_machine_types" "available" {
   for_each = toset(data.google_compute_zones.available.names)
-  filter   = "name = \"${var.node_machine_type}\""
   zone     = each.value
 }
 
 locals {
-  zones_with_node_machine_type_available = sort([
-    for zone, available_machine_types in data.google_compute_machine_types.available :
-    zone if contains(
-      [for machine_types in available_machine_types.machine_types : machine_types.name],
-      var.node_machine_type,
-    )
+  node_pools = flatten([
+    for node_pool in [
+      {
+        machine_type     = var.node_pool_main_machine_type
+        node_pool_name   = "main"
+        total_node_count = var.node_pool_main_node_count
+      },
+      {
+        machine_type     = var.node_pool_vpn_machine_type
+        node_pool_name   = "vpn"
+        total_node_count = var.node_pool_vpn_node_count
+      },
+    ] :
+    [
+      for available_zones in [
+        sort([
+          for zone_name, available_machine_types in data.google_compute_machine_types.available :
+          zone_name
+          if contains(
+            [for machine_types in available_machine_types.machine_types : machine_types.name],
+            node_pool.machine_type,
+          )
+        ])
+      ] :
+      [
+        for i, zone_name in available_zones :
+        {
+          machine_type   = node_pool.machine_type
+          node_pool_name = node_pool.node_pool_name
+          zone_name      = zone_name
+          zone_node_count = (
+            floor(node_pool.total_node_count / length(available_zones))
+            + (i < (node_pool.total_node_count % length(available_zones)) ? 1 : 0)
+          )
+        }
+      ]
+    ]
   ])
-
-  node_distribution = [
-    for i, zone_name in local.zones_with_node_machine_type_available :
-    {
-      node_count = (
-        floor(var.node_count / length(local.zones_with_node_machine_type_available))
-        + (i < (var.node_count % length(local.zones_with_node_machine_type_available)) ? 1 : 0)
-      )
-      zone_name = zone_name
-    }
-  ]
 }
 
 resource "google_container_node_pool" "main" {
   for_each = {
-    for zone in local.node_distribution :
-    zone.zone_name => zone
-    if zone.node_count > 0
+    for node_pool in local.node_pools :
+    node_pool.zone_name => node_pool
+    if node_pool.node_pool_name == "main" && node_pool.zone_node_count > 0
   }
   cluster = google_container_cluster.main.id
   name    = "main-${each.value.zone_name}"
@@ -125,14 +144,34 @@ resource "google_container_node_pool" "main" {
     enable_private_nodes = true
   }
   node_config {
-    machine_type    = var.node_machine_type
+    machine_type    = each.value.machine_type
     preemptible     = true
     service_account = google_service_account.nodes.email
   }
-  node_count     = each.value.node_count
+  node_count     = each.value.zone_node_count
   node_locations = [each.value.zone_name]
-  management {
-    auto_repair  = true
-    auto_upgrade = true
+}
+
+# These Ubuntu nodes will be used for VPN pods, which need a particular
+# WireGuard kernel module installed for that's not available in the
+# default ContainerOS.
+resource "google_container_node_pool" "vpn" {
+  for_each = {
+    for node_pool in local.node_pools :
+    node_pool.zone_name => node_pool
+    if node_pool.node_pool_name == "vpn" && node_pool.zone_node_count > 0
   }
+  cluster = google_container_cluster.main.id
+  name    = "vpn-${each.value.zone_name}"
+  network_config {
+    enable_private_nodes = true
+  }
+  node_config {
+    image_type      = "ubuntu_containerd"
+    machine_type    = each.value.machine_type
+    preemptible     = true
+    service_account = google_service_account.nodes.email
+  }
+  node_count     = each.value.zone_node_count
+  node_locations = [each.value.zone_name]
 }
