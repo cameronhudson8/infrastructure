@@ -28,8 +28,9 @@ resource "google_container_cluster" "main" {
   depends_on = [
     google_project_iam_member.nodes,
   ]
-  enable_l4_ilb_subsetting = true
-  initial_node_count       = 1
+  enable_cilium_clusterwide_network_policy = true
+  enable_l4_ilb_subsetting                 = true
+  initial_node_count                       = 1
   ip_allocation_policy {
     cluster_secondary_range_name  = var.kubernetes_pods_subnet_secondary_range_name
     services_secondary_range_name = var.kubernetes_services_subnet_secondary_range_name
