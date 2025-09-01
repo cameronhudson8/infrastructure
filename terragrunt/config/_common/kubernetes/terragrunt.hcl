@@ -47,8 +47,6 @@ generate "main" {
       kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
       node_pool_main_node_count                       = ${jsonencode(local.env_vars.node_pool_main_node_count)}
       node_pool_main_machine_type                     = ${jsonencode(local.env_vars.node_pool_main_machine_type)}
-      node_pool_vpn_node_count                        = ${jsonencode(local.env_vars.node_pool_vpn_node_count)}
-      node_pool_vpn_machine_type                      = ${jsonencode(local.env_vars.node_pool_vpn_machine_type)}
       source                                          = "${find_in_parent_folders("modules")}/kubernetes"
       vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
     }
@@ -69,9 +67,14 @@ generate "outputs" {
       value       = module.kubernetes.node_service_account_name
     }
 
-    output "wireguard_node_labels" {
-      description = "The node labels that indicate where the WireGuard VPN pods should run"
-      value       = module.kubernetes_cluster.wireguard_node_labels
+    output "kubernetes_cluster_id" {
+      description = "The ID of the Kubernetes cluster"
+      value       = module.kubernetes_cluster.kubernetes_cluster_id
+    }
+
+    output "kubernetes_nodes_service_account_email" {
+      description = "The email address of the GCP service account of the Kubernetes nodes"
+      value       = module.kubernetes_cluster.kubernetes_nodes_service_account_email
     }
   EOF
   if_exists = "overwrite_terragrunt"

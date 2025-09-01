@@ -99,11 +99,6 @@ locals {
         node_pool_name   = "main"
         total_node_count = var.node_pool_main_node_count
       },
-      {
-        machine_type     = var.node_pool_vpn_machine_type
-        node_pool_name   = "vpn"
-        total_node_count = var.node_pool_vpn_node_count
-      },
     ] :
     [
       for available_zones in [
@@ -144,37 +139,6 @@ resource "google_container_node_pool" "main" {
     enable_private_nodes = true
   }
   node_config {
-    machine_type    = each.value.machine_type
-    preemptible     = true
-    service_account = google_service_account.nodes.email
-  }
-  node_count     = each.value.zone_node_count
-  node_locations = [each.value.zone_name]
-}
-
-locals {
-  wireguard_node_labels = {
-    wireguard = "true"
-  }
-}
-
-# These Ubuntu nodes will be used for VPN pods, which need a particular
-# WireGuard kernel module installed for that's not available in the
-# default ContainerOS.
-resource "google_container_node_pool" "vpn" {
-  for_each = {
-    for node_pool in local.node_pools :
-    node_pool.zone_name => node_pool
-    if node_pool.node_pool_name == "vpn" && node_pool.zone_node_count > 0
-  }
-  cluster = google_container_cluster.main.id
-  name    = "vpn-${each.value.zone_name}"
-  network_config {
-    enable_private_nodes = true
-  }
-  node_config {
-    image_type      = "ubuntu_containerd"
-    labels          = local.wireguard_node_labels
     machine_type    = each.value.machine_type
     preemptible     = true
     service_account = google_service_account.nodes.email

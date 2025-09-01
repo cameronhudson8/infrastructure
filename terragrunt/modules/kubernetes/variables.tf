@@ -9,7 +9,7 @@ variable "gcp_project_id" {
 }
 
 variable "kubernetes_cluster_location" {
-  description = "The location (region or zone) of the Kubernetes cluster's control plane"
+  description = "The location (region or zone) of the control plane of the Kubernetes cluster"
   type        = string
 }
 
@@ -45,16 +45,6 @@ variable "node_pool_main_node_count" {
 
 variable "node_pool_main_machine_type" {
   description = "The machine type of the nodes in the main node pool (which runs everything except VPN)"
-  type        = string
-}
-
-variable "node_pool_vpn_node_count" {
-  description = "The number of nodes in the VPN node pool (which runs only the VPN pods)"
-  type        = number
-}
-
-variable "node_pool_vpn_machine_type" {
-  description = "The machine type of the nodes in the VPN node pool (which runs only the VPN pods)"
   type        = string
 }
 

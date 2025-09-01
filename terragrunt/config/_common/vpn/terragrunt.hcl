@@ -56,14 +56,17 @@ generate "providers" {
 
 generate "main" {
   contents  = <<-EOF
-    module "vpc" {
-      # private_subnet_id              = ${jsonencode(dependency.vpc.outputs.private_subnet_id)}
-      private_subnet_ipv6_cidr       = ${jsonencode(dependency.vpc.outputs.private_subnet_ipv6_cidr)}
-      source                         = "${find_in_parent_folders("modules")}/vpn"
-      # vpc_id                         = ${jsonencode(dependency.vpc.outputs.vpc_id)}
-      vpn_clients_ipv6_prefix_length = ${jsonencode(local.env_vars.vpn_clients_ipv6_prefix_length)}
-      wireguard_node_labels          = ${jsonencode(dependency.kubernetes_cluster.outputs.wireguard_node_labels)}
-      wireguard_version              = ${jsonencode(local.env_vars.wireguard_version)}
+    module "vpn" {
+      kubernetes_cluster_id                  = ${jsonencode(dependency.kubernetes_cluster.outputs.kubernetes_cluster_id)}
+      kubernetes_nodes_service_account_email = ${jsonencode(dependency.kubernetes_cluster.outputs.kubernetes_nodes_service_account_email)}
+      node_pool_vpn_machine_type             = ${jsonencode(local.env_vars.node_pool_vpn_machine_type)}
+      node_pool_vpn_node_count               = ${jsonencode(local.env_vars.node_pool_vpn_node_count)}
+      # private_subnet_id                      = ${jsonencode(dependency.vpc.outputs.private_subnet_id)}
+      private_subnet_ipv6_cidr               = ${jsonencode(dependency.vpc.outputs.private_subnet_ipv6_cidr)}
+      source                                 = "${find_in_parent_folders("modules")}/vpn"
+      # vpc_id                                 = ${jsonencode(dependency.vpc.outputs.vpc_id)}
+      vpn_clients_ipv6_prefix_length         = ${jsonencode(local.env_vars.vpn_clients_ipv6_prefix_length)}
+      wireguard_version                      = ${jsonencode(local.env_vars.wireguard_version)}
     }
   EOF
   if_exists = "overwrite_terragrunt"

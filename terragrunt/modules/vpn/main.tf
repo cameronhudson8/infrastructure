@@ -1,3 +1,73 @@
+data "google_compute_zones" "available" {}
+
+data "google_compute_machine_types" "available" {
+  for_each = toset(data.google_compute_zones.available.names)
+  zone     = each.value
+}
+
+locals {
+  node_pools = flatten([
+    for node_pool in [
+      {
+        machine_type     = var.node_pool_vpn_machine_type
+        node_pool_name   = "vpn"
+        total_node_count = var.node_pool_vpn_node_count
+      },
+    ] :
+    [
+      for available_zones in [
+        sort([
+          for zone_name, available_machine_types in data.google_compute_machine_types.available :
+          zone_name
+          if contains(
+            [for machine_types in available_machine_types.machine_types : machine_types.name],
+            node_pool.machine_type,
+          )
+        ])
+      ] :
+      [
+        for i, zone_name in available_zones :
+        {
+          machine_type   = node_pool.machine_type
+          node_pool_name = node_pool.node_pool_name
+          zone_name      = zone_name
+          zone_node_count = (
+            floor(node_pool.total_node_count / length(available_zones))
+            + (i < (node_pool.total_node_count % length(available_zones)) ? 1 : 0)
+          )
+        }
+      ]
+    ]
+  ])
+}
+
+# These Ubuntu nodes will be used for VPN pods, which need a particular
+# WireGuard kernel module installed for that's not available in the
+# default ContainerOS.
+resource "google_container_node_pool" "vpn" {
+  for_each = {
+    for node_pool in local.node_pools :
+    node_pool.zone_name => node_pool
+    if node_pool.node_pool_name == "vpn" && node_pool.zone_node_count > 0
+  }
+  cluster  = var.kubernetes_cluster_id
+  name     = "vpn-${each.value.zone_name}"
+  network_config {
+    enable_private_nodes = true
+  }
+  node_config {
+    image_type = "ubuntu_containerd"
+    labels = {
+      wireguard = "true"
+    }
+    machine_type    = each.value.machine_type
+    preemptible     = true
+    service_account = var.kubernetes_nodes_service_account_email
+  }
+  node_count     = each.value.zone_node_count
+  node_locations = [each.value.zone_name]
+}
+
 resource "kubernetes_namespace" "vpn" {
   metadata {
     name = "vpn"
@@ -31,8 +101,37 @@ resource "kubernetes_daemonset" "wireguard_kernel_module_installer" {
         labels = local.installer_labels
       }
       spec {
-        node_selector = var.wireguard_node_labels
+        container {
+          image = "registry.k8s.io/pause:3.9"
+          name  = "pause"
+          security_context {
+            allow_privilege_escalation = false
+            capabilities {
+              drop = ["ALL"]
+            }
+            privileged                = false
+            read_only_root_filesystem = true
+            run_as_group              = 0
+            run_as_non_root           = false
+            run_as_user               = 0
+          }
+        }
         init_container {
+          command = [
+            "/bin/bash",
+            "-eu",
+            "-o",
+            "pipefail",
+            "-c",
+            <<-BASH
+              apt-get update -y
+              # kmod includes modprobe
+              apt-get install -y kmod wireguard
+              # "Load" the kernel module.
+              modprobe wireguard
+            BASH
+            ,
+          ]
           # GKE uses the most recent LTS Ubuntu version for Ubuntu nodes.
           # We can use the same Ubuntu version for this container by specifying
           # "ubuntu:latest", because "The ubuntu:latest tag points to the
@@ -52,21 +151,6 @@ resource "kubernetes_daemonset" "wireguard_kernel_module_installer" {
             run_as_non_root           = false
             run_as_user               = 0
           }
-          command = [
-            "/bin/bash",
-            "-eu",
-            "-o",
-            "pipefail",
-            "-c",
-            <<-BASH
-              apt-get update -y
-              # kmod includes modprobe
-              apt-get install -y kmod wireguard
-              # "Load" the kernel module.
-              modprobe wireguard
-            BASH
-            ,
-          ]
           volume_mount {
             mount_path = "/lib/modules"
             name       = "host-lib-modules"
@@ -87,21 +171,7 @@ resource "kubernetes_daemonset" "wireguard_kernel_module_installer" {
             name       = "host-etc-modules"
           }
         }
-        container {
-          image = "registry.k8s.io/pause:3.9"
-          name  = "pause"
-          security_context {
-            allow_privilege_escalation = false
-            capabilities {
-              drop = ["ALL"]
-            }
-            privileged                = false
-            read_only_root_filesystem = true
-            run_as_group              = 0
-            run_as_non_root           = false
-            run_as_user               = 0
-          }
-        }
+        node_selector = values(google_container_node_pool.vpn)[0].node_config[0].labels
         volume {
           host_path {
             path = "/lib/modules"
@@ -134,40 +204,7 @@ resource "kubernetes_daemonset" "wireguard_kernel_module_installer" {
   }
 }
 
-data "external" "wireguard_server_keys" {
-  program = [
-    "/usr/bin/env",
-    "bash",
-    "-eu",
-    "-o",
-    "pipefail",
-    "-c",
-    <<-BASH
-        tempdir=$(mktemp -d)
-        trap 'rm -rf $${tempdir}' EXIT
-        openssl genpkey \
-            -algorithm X25519 \
-            -out "$${tempdir}/private-key-with-header-and-footer.pem" \
-            -outform PEM \
-            -outpubkey "$${tempdir}/public-key-with-header-and-footer.pem"
-        private_key=$(grep -v '^-' "$${tempdir}/private-key-with-header-and-footer.pem" | tr -d '\n')
-        public_key=$(grep -v '^-' "$${tempdir}/public-key-with-header-and-footer.pem" | tr -d '\n')
-        jq \
-            --arg private_key "$${private_key}" \
-            --arg public_key "$${public_key}" \
-            --null-input \
-            -cM \
-            "$(
-                cat <<-JSON
-        			{
-        			    "private_key": \$private_key,
-        			    "public_key": \$public_key
-        			}
-        		JSON
-            )"
-    BASH
-  ]
-}
+resource "wireguard_asymmetric_key" "keypair" {}
 
 locals {
   # Example: private_subnet_prefix_length = 64
@@ -197,7 +234,7 @@ resource "kubernetes_secret" "wireguard_config" {
       # The port that the WireGuard server listens on for incoming connections.
       ListenPort = ${local.wireguard_server_port}
       # The WireGuard server's private key.
-      PrivateKey = ${data.external.wireguard_server_keys.result.private_key}
+      PrivateKey = ${wireguard_asymmetric_key.keypair.private_key}
 
       [Peer]
       # The IP addresses assigned to this peer on the *private* VPN network.
@@ -206,7 +243,7 @@ resource "kubernetes_secret" "wireguard_config" {
       # The publicly reachable hostnames:ports or IP addresses:ports of the VPN server.
       # Endpoint = vpn.example.com:51820
       # Client 1's public key.
-      PublicKey =  ${data.external.wireguard_server_keys.result.public_key}
+      PublicKey =  ${wireguard_asymmetric_key.keypair.public_key}
     EOF
   }
   metadata {
@@ -386,13 +423,22 @@ resource "kubernetes_deployment" "vpn" {
             read_only  = true
           }
         }
+        node_selector = values(google_container_node_pool.vpn)[0].node_config[0].labels
         security_context {
           fs_group        = local.wireguard_users.runtime.gid
           run_as_group    = local.wireguard_users.runtime.gid
           run_as_non_root = false
           run_as_user     = local.wireguard_users.runtime.uid
         }
-        # service_account_name = kubernetes_service_account.vpn.metadata[0].name
+        topology_spread_constraint {
+          label_selector {
+            match_labels = local.wireguard_deployment_labels
+          }
+          max_skew           = 1
+          min_domains        = 3
+          node_taints_policy = "Honor"
+          topology_key       = "topology.kubernetes.io/zone"
+        }
         volume {
           empty_dir {
             medium = "Memory"

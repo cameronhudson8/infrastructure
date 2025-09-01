@@ -1,9 +1,5 @@
 terraform {
   required_providers {
-    external = {
-      source  = "hashicorp/external"
-      version = "~> 2.0"
-    }
     google = {
       source  = "hashicorp/google"
       version = "~> 6.0"
@@ -11,6 +7,10 @@ terraform {
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.0"
+    }
+    wireguard = {
+      source  = "OJFord/wireguard"
+      version = "~> 0.4"
     }
   }
   required_version = "~> 1.0"
