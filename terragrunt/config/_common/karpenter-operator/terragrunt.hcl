@@ -15,6 +15,10 @@ generate "terraform" {
           source  = "hashicorp/google"
           version = "~> 7.0"
         }
+        helm = {
+          source  = "hashicorp/helm"
+          version = "~> 3.0"
+        }
         kubernetes = {
           source  = "hashicorp/kubernetes"
           version = "~> 2.0"
@@ -36,6 +40,13 @@ generate "providers" {
 
     data "google_client_config" "current" {}
 
+    provider "helm" {
+      kubernetes = {
+        host  = ${jsonencode(dependency.kubernetes.outputs.control_plane_endpoint)}
+        token = data.google_client_config.current.access_token
+      }
+    }
+
     provider "kubernetes" {
       host  = ${jsonencode(dependency.kubernetes.outputs.control_plane_endpoint)}
       token = data.google_client_config.current.access_token
@@ -47,17 +58,14 @@ generate "providers" {
 
 generate "main" {
   contents  = <<-EOF
-    module "default_network_policies" {
-      source = "${find_in_parent_folders("modules")}/default-network-policies"
+    module "karpenter_operator" {
+      cluster_location          = ${jsonencode(local.env_vars.kubernetes_cluster_location)}
+      cluster_name              = ${jsonencode(local.env_vars.kubernetes_cluster_name)}
+      karpenter_version         = ${jsonencode(local.env_vars.karpenter_version)}
+      node_service_account_name = ${jsonencode(dependency.kubernetes.outputs.node_service_account_name)}
+      source                    = "${find_in_parent_folders("modules")}/karpenter-operator"
     }
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "main.tf"
-}
-
-generate "outputs" {
-  contents  = <<-EOF
-  EOF
-  if_exists = "overwrite_terragrunt"
-  path      = "outputs.tf"
 }

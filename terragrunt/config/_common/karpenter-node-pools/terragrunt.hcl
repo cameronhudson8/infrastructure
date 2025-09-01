@@ -47,17 +47,10 @@ generate "providers" {
 
 generate "main" {
   contents  = <<-EOF
-    module "default_network_policies" {
-      source = "${find_in_parent_folders("modules")}/default-network-policies"
+    module "karpenter_node_pools" {
+      source = "${find_in_parent_folders("modules")}/karpenter-node-pools"
     }
   EOF
   if_exists = "overwrite_terragrunt"
   path      = "main.tf"
-}
-
-generate "outputs" {
-  contents  = <<-EOF
-  EOF
-  if_exists = "overwrite_terragrunt"
-  path      = "outputs.tf"
 }

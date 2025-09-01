@@ -8,6 +8,16 @@ variable "gcp_project_id" {
   type        = string
 }
 
+variable "kubernetes_cluster_location" {
+  description = "The location (region or zone) of the Kubernetes cluster's control plane"
+  type        = string
+}
+
+variable "kubernetes_cluster_name" {
+  description = "The name of the Kubernetes cluster"
+  type        = string
+}
+
 variable "kubernetes_cluster_subnet_name" {
   description = "The name of the subnet to use for the Kubernetes nodes"
   type        = string

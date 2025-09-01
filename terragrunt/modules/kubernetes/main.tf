@@ -1,10 +1,6 @@
-locals {
-  cluster_name = "main"
-}
-
 resource "google_service_account" "nodes" {
-  account_id   = "cluster-${local.cluster_name}-nodes"
-  display_name = "For the nodes of cluster '${local.cluster_name}'"
+  account_id   = "cluster-${var.kubernetes_cluster_name}-nodes"
+  display_name = "For the nodes of cluster '${var.kubernetes_cluster_name}'"
 }
 
 resource "google_project_iam_member" "nodes" {
@@ -49,7 +45,7 @@ resource "google_container_cluster" "main" {
   lifecycle {
     ignore_changes = [node_config]
   }
-  location = sort(data.google_compute_zones.available.names)[0]
+  location = var.kubernetes_cluster_location
   master_authorized_networks_config {
     cidr_blocks {
       display_name = "All IPv4 addresses"
@@ -63,7 +59,7 @@ resource "google_container_cluster" "main" {
       enable_relay   = true
     }
   }
-  name            = local.cluster_name
+  name            = var.kubernetes_cluster_name
   network         = var.vpc_name
   networking_mode = "VPC_NATIVE"
   node_config {
