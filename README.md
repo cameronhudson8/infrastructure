@@ -1,6 +1,6 @@
 # infrastructure
 
-Terraform code for creating local and cloud infrastructure where applications are deployed.
+Terraform code for creating cloud infrastructure where applications are deployed.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ Terraform code for creating local and cloud infrastructure where applications ar
 
 ## Setup
 
-1. To use this repo, an existing Google Cloud Storage (GCS) buckets needed. You can create such a bucket with the following commands.
+1. To use this repo, an existing Google Cloud Storage (GCS) bucket needed in order to store the Terraform state. You can create such a bucket with the following commands.
     ```
     ENV_NAME="staging"
     gcloud storage buckets create "gs://cameronhudson8-${ENV_NAME}-tf-state" \
