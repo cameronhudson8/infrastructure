@@ -45,7 +45,7 @@ generate "main" {
       kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
       node_count                                      = ${jsonencode(local.env_vars.node_count)}
       node_machine_type                               = ${jsonencode(local.env_vars.node_machine_type)}
-      source                                          = "${find_in_parent_folders("modules")}/kubernetes-cluster"
+      source                                          = "${find_in_parent_folders("modules")}/kubernetes"
       vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
     }
   EOF

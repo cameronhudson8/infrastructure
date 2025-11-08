@@ -1,5 +1,5 @@
 dependency "kubernetes_cluster" {
-  config_path = find_in_parent_folders("kubernetes-cluster")
+  config_path = find_in_parent_folders("kubernetes")
 }
 
 locals {
