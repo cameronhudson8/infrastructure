@@ -47,6 +47,12 @@ resource "google_container_cluster" "main" {
     }
     gcp_public_cidrs_access_enabled = true
   }
+  monitoring_config {
+    advanced_datapath_observability_config {
+      enable_metrics = false
+      enable_relay   = true
+    }
+  }
   name            = local.cluster_name
   network         = var.vpc_name
   networking_mode = "VPC_NATIVE"

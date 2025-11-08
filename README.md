@@ -35,7 +35,8 @@ terragrunt apply --working-dir ./terragrunt/<module>
 Modules:
 1. `vpc`
 1. `cluster`
-1. In-cluster services
+1. In-cluster content
+    * `default-network-policies`
     * (TODO) `vpn`
     * `ingress-nginx`
     * (TODO) `ci-cd`
