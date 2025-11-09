@@ -13,7 +13,7 @@ generate "terraform" {
       required_providers {
         google = {
           source  = "hashicorp/google"
-          version = "~> 6.0"
+          version = "~> 7.0"
         }
       }
       required_version = "~> 1.0"
@@ -45,7 +45,7 @@ generate "main" {
       kubernetes_services_subnet_secondary_range_name = ${jsonencode(dependency.vpc.outputs.kubernetes_services_subnet_secondary_range_name)}
       node_count                                      = ${jsonencode(local.env_vars.node_count)}
       node_machine_type                               = ${jsonencode(local.env_vars.node_machine_type)}
-      source                                          = "${find_in_parent_folders("modules")}/kubernetes-cluster"
+      source                                          = "${find_in_parent_folders("modules")}/kubernetes"
       vpc_name                                        = ${jsonencode(dependency.vpc.outputs.vpc_name)}
     }
   EOF
@@ -55,11 +55,6 @@ generate "main" {
 
 generate "outputs" {
   contents  = <<-EOF
-    output "control_plane_ca_certificate" {
-      description = "The certificate of the certificate authority that issued the control plane's TLS certificate."
-      value       = module.kubernetes_cluster.control_plane_ca_certificate
-    }
-
     output "control_plane_endpoint" {
       description = "The URI at which the cluster's control plane can be reached"
       value       = module.kubernetes_cluster.control_plane_endpoint

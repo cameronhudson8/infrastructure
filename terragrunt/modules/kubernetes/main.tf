@@ -23,13 +23,24 @@ resource "google_project_iam_member" "nodes" {
 data "google_compute_zones" "available" {}
 
 resource "google_container_cluster" "main" {
+  control_plane_endpoints_config {
+    dns_endpoint_config {
+      allow_external_traffic    = true
+      enable_k8s_certs_via_dns  = true
+      enable_k8s_tokens_via_dns = true
+    }
+    ip_endpoints_config {
+      enabled = false
+    }
+  }
   datapath_provider   = "ADVANCED_DATAPATH"
   deletion_protection = false
   depends_on = [
     google_project_iam_member.nodes,
   ]
-  enable_l4_ilb_subsetting = true
-  initial_node_count       = 1
+  enable_cilium_clusterwide_network_policy = true
+  enable_l4_ilb_subsetting                 = true
+  initial_node_count                       = 1
   ip_allocation_policy {
     cluster_secondary_range_name  = var.kubernetes_pods_subnet_secondary_range_name
     services_secondary_range_name = var.kubernetes_services_subnet_secondary_range_name
@@ -45,6 +56,12 @@ resource "google_container_cluster" "main" {
       cidr_block   = "0.0.0.0/0"
     }
     gcp_public_cidrs_access_enabled = true
+  }
+  monitoring_config {
+    advanced_datapath_observability_config {
+      enable_metrics = false
+      enable_relay   = true
+    }
   }
   name            = local.cluster_name
   network         = var.vpc_name
