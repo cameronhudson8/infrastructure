@@ -9,11 +9,6 @@ variable "kubernetes_client_key" {
   type        = string
 }
 
-variable "kubernetes_cluster_ca_certificate" {
-  description = "The cluster CA certificate for TLS connection to the Kubernetes API server"
-  type        = string
-}
-
 variable "kubernetes_server" {
   description = "The base URI of the Kubernetes API server"
   type        = string

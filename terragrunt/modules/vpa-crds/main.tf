@@ -2,11 +2,10 @@
 
 resource "terraform_data" "vpa" {
   input = {
-    kubernetes_client_certificate     = var.kubernetes_client_certificate
-    kubernetes_client_key             = var.kubernetes_client_key
-    kubernetes_cluster_ca_certificate = var.kubernetes_cluster_ca_certificate
-    kubernetes_server                 = var.kubernetes_server
-    operator_version                  = var.operator_version
+    kubernetes_client_certificate = var.kubernetes_client_certificate
+    kubernetes_client_key         = var.kubernetes_client_key
+    kubernetes_server             = var.kubernetes_server
+    operator_version              = var.operator_version
   }
   triggers_replace = [
     var.kubernetes_server,
@@ -25,7 +24,6 @@ resource "terraform_data" "vpa" {
       apiVersion: v1
       clusters:
         - cluster:
-            certificate-authority-data: ${base64encode(var.kubernetes_cluster_ca_certificate)}
             server: ${var.kubernetes_server}
           name: default
       contexts:
@@ -71,7 +69,6 @@ resource "terraform_data" "vpa" {
       apiVersion: v1
       clusters:
         - cluster:
-            certificate-authority-data: ${base64encode(self.input.kubernetes_cluster_ca_certificate)}
             server: ${self.input.kubernetes_server}
           name: default
       contexts:

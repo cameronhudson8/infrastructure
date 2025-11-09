@@ -37,9 +37,8 @@ generate "providers" {
     data "google_client_config" "current" {}
 
     provider "kubernetes" {
-      cluster_ca_certificate = ${jsonencode(dependency.kubernetes_cluster.outputs.control_plane_ca_certificate)}
-      host                   = ${jsonencode(dependency.kubernetes_cluster.outputs.control_plane_endpoint)}
-      token                  = data.google_client_config.current.access_token
+      host  = ${jsonencode(dependency.kubernetes_cluster.outputs.control_plane_endpoint)}
+      token = data.google_client_config.current.access_token
     }
   EOF
   if_exists = "overwrite_terragrunt"

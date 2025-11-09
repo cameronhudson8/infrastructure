@@ -55,11 +55,6 @@ generate "main" {
 
 generate "outputs" {
   contents  = <<-EOF
-    output "control_plane_ca_certificate" {
-      description = "The certificate of the certificate authority that issued the control plane's TLS certificate."
-      value       = module.kubernetes_cluster.control_plane_ca_certificate
-    }
-
     output "control_plane_endpoint" {
       description = "The URI at which the cluster's control plane can be reached"
       value       = module.kubernetes_cluster.control_plane_endpoint

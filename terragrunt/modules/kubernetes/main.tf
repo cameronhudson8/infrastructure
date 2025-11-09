@@ -23,6 +23,16 @@ resource "google_project_iam_member" "nodes" {
 data "google_compute_zones" "available" {}
 
 resource "google_container_cluster" "main" {
+  control_plane_endpoints_config {
+    dns_endpoint_config {
+      allow_external_traffic    = true
+      enable_k8s_certs_via_dns  = true
+      enable_k8s_tokens_via_dns = true
+    }
+    ip_endpoints_config {
+      enabled = false
+    }
+  }
   datapath_provider   = "ADVANCED_DATAPATH"
   deletion_protection = false
   depends_on = [
