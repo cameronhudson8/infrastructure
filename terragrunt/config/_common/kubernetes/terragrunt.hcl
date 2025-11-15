@@ -36,9 +36,11 @@ generate "providers" {
 
 generate "main" {
   contents  = <<-EOF
-    module "kubernetes_cluster" {
+    module "kubernetes" {
       env_name                                        = ${jsonencode(local.env_vars.env_name)}
       gcp_project_id                                  = ${jsonencode(local.env_vars.gcp_project_id)}
+      kubernetes_cluster_location                     = ${jsonencode(local.env_vars.kubernetes_cluster_location)}
+      kubernetes_cluster_name                         = ${jsonencode(local.env_vars.kubernetes_cluster_name)}
       kubernetes_cluster_subnet_name                  = ${jsonencode(dependency.vpc.outputs.kubernetes_cluster_subnet_name)}
       kubernetes_control_plane_ipv4_cidr              = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
       kubernetes_pods_subnet_secondary_range_name     = ${jsonencode(dependency.vpc.outputs.kubernetes_pods_subnet_secondary_range_name)}
@@ -57,7 +59,12 @@ generate "outputs" {
   contents  = <<-EOF
     output "control_plane_endpoint" {
       description = "The URI at which the cluster's control plane can be reached"
-      value       = module.kubernetes_cluster.control_plane_endpoint
+      value       = module.kubernetes.control_plane_endpoint
+    }
+
+    output "node_service_account_name" {
+      description = "The name of the GCP service account assigned to the Kubernetes nodes"
+      value       = module.kubernetes.node_service_account_name
     }
   EOF
   if_exists = "overwrite_terragrunt"

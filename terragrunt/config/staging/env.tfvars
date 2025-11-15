@@ -48,20 +48,21 @@
 
 env_name = "staging"
 # I currently only have 1 GCP project. Reconsider later.
-gcp_project_id                   = "cameronhudson8"
-gcp_region                       = "us-central1"
-ingress_nginx_helm_chart_version = "4.12.0"
-ingress_nginx_service_type       = "LoadBalancer"
-load_balancers_ipv4_cidr         = "10.255.255.248/29"
-node_count                       = 3
-# "e2-standard-2" costs less per CPU and per GB mem, but the smallest size is twice as large as "t2a-standard-1".
-# node_machine_type      = "t2a-standard-1"
-node_machine_type                  = "e2-small"
+gcp_project_id                     = "cameronhudson8"
+gcp_region                         = "us-central1"
+ingress_nginx_helm_chart_version   = "4.12.0"
+ingress_nginx_service_type         = "LoadBalancer"
+karpenter_version                  = "main"
 kube_prometheus_version            = "v0.14.0"
+kubernetes_cluster_location        = "us-central1-a"
+kubernetes_cluster_name            = "main"
 kubernetes_control_plane_ipv4_cidr = "10.255.255.224/28"
 kubernetes_nodes_ipv4_cidr         = "10.128.0.0/10"
 kubernetes_pods_ipv4_cidr          = "10.0.0.0/9"
 kubernetes_services_ipv4_cidr      = "10.254.0.0/16"
 kubernetes_version                 = "1.30"
+load_balancers_ipv4_cidr           = "10.255.255.248/29"
+node_count                         = 3
+node_machine_type                  = "e2-standard-2"
 tf_state_bucket_name               = "cameronhudson8-staging-tf-state"
 vpa_operator_version               = "1.2.0"

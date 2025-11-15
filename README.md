@@ -37,6 +37,8 @@ Modules:
 1. `kubernetes`
 1. In-cluster content
     * `default-network-policies`
+    * `karpenter-operator`
+    * `karpenter-node-pools`
     * (TODO) `vpn`
     * `ingress-nginx`
     * (TODO) `ci-cd`
