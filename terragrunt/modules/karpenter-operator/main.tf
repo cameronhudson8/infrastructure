@@ -68,22 +68,6 @@ resource "kubernetes_manifest" "karpenter_crds" {
   manifest = yamldecode(file("${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter/crds/${each.value}"))
 }
 
-# resource "kubernetes_namespace" "karpenter" {
-#   metadata {
-#     name = "karpenter"
-#   }
-# }
-
-# resource "kubernetes_service_account" "karpenter" {
-#   metadata {
-#     annotations = {
-#       "iam.gke.io/gcp-service-account" = google_service_account.karpenter.email
-#     }
-#     name      = "karpenter"
-#     namespace = kubernetes_namespace.karpenter.metadata[0].name
-#   }
-# }
-
 locals {
   namespace                = "karpenter"
   k8s_service_account_name = "karpenter"
@@ -96,7 +80,10 @@ resource "google_project_iam_member" "karpenter_k8s_service_account" {
 }
 
 resource "helm_release" "karpenter" {
-  depends_on       = [google_project_iam_member.karpenter_k8s_service_account]
+  depends_on = [
+    google_project_iam_member.karpenter_k8s_service_account,
+    kubernetes_manifest.karpenter_crds,
+  ]
   chart            = "${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter"
   create_namespace = true
   name             = "karpenter"
