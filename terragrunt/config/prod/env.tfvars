@@ -39,7 +39,8 @@
 # + Kubernetes control plane        |  10.255.255.224/28 | 10.255.255.239 | 2 ^ 4
 # + <Unused>                        |  10.255.255.240/28 | 10.255.255.255 | 2 ^ 4
 
-env_name = "prod"
+cassandra_version = "5"
+env_name          = "prod"
 # I currently only have 1 GCP project. Reconsider later.
 gcp_project_id                     = "cameronhudson8"
 gcp_region                         = "us-central1"
