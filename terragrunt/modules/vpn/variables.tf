@@ -1,14 +1,14 @@
-# variable "allowed_source_ranges_ipv4" {
-#   description = "List of IPv4 CIDR blocks allowed to access the VPN"
-#   type        = list(string)
-#   default     = ["0.0.0.0/0"]
-# }
+variable "allowed_source_ranges_ipv4" {
+  description = "List of IPv4 CIDR blocks allowed to access the VPN"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
 
-# variable "allowed_source_ranges_ipv6" {
-#   description = "List of IPv6 CIDR blocks allowed to access the VPN"
-#   type        = list(string)
-#   default     = ["::/0"]
-# }
+variable "allowed_source_ranges_ipv6" {
+  description = "List of IPv6 CIDR blocks allowed to access the VPN"
+  type        = list(string)
+  default     = ["::/0"]
+}
 
 variable "kubernetes_cluster_id" {
   description = "The ID of the Kubernetes cluster"

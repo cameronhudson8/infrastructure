@@ -15,13 +15,9 @@ generate "terraform" {
   contents  = <<-EOF
     terraform {
       required_providers {
-        external = {
-          source  = "hashicorp/external"
-          version = "~> 2.0"
-        }
         google = {
           source  = "hashicorp/google"
-          version = "~> 6.0"
+          version = "~> 7.0"
         }
         kubernetes = {
           source  = "hashicorp/kubernetes"

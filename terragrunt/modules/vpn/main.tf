@@ -50,8 +50,8 @@ resource "google_container_node_pool" "vpn" {
     node_pool.zone_name => node_pool
     if node_pool.node_pool_name == "vpn" && node_pool.zone_node_count > 0
   }
-  cluster  = var.kubernetes_cluster_id
-  name     = "vpn-${each.value.zone_name}"
+  cluster = var.kubernetes_cluster_id
+  name    = "vpn-${each.value.zone_name}"
   network_config {
     enable_private_nodes = true
   }
@@ -204,6 +204,41 @@ resource "kubernetes_daemonset" "wireguard_kernel_module_installer" {
   }
 }
 
+
+resource "kubernetes_network_policy" "vpn" {
+  metadata {
+    name      = "wireguard-server"
+    namespace = kubernetes_namespace.vpn.metadata[0].name
+  }
+  spec {
+    egress {}
+    ingress {
+      dynamic "from" {
+        for_each = concat(
+          local.source_ip_ranges.ipv4,
+          local.source_ip_ranges.ipv6,
+        )
+        content {
+          ip_block {
+            cidr = from.value
+          }
+        }
+      }
+      ports {
+        port     = local.wireguard_server_port
+        protocol = "UDP"
+      }
+    }
+    pod_selector {
+      match_labels = local.wireguard_deployment_labels
+    }
+    policy_types = [
+      "Egress",
+      "Ingress",
+    ]
+  }
+}
+
 resource "wireguard_asymmetric_key" "keypair" {}
 
 locals {
@@ -241,7 +276,7 @@ resource "kubernetes_secret" "wireguard_config" {
       # AllowedIPs = 2600:2d00:423a:15c4:0:0:0:2/128
       AllowedIPs = ${cidrhost(local.vpn_hosts_ipv6_cidr, 2)}/128
       # The publicly reachable hostnames:ports or IP addresses:ports of the VPN server.
-      # Endpoint = vpn.example.com:51820
+      # Endpoint = 10.20.103.2:51820
       # Client 1's public key.
       PublicKey =  ${wireguard_asymmetric_key.keypair.public_key}
     EOF
@@ -295,6 +330,7 @@ locals {
 }
 
 resource "kubernetes_deployment" "vpn" {
+  depends_on = [kubernetes_daemonset.wireguard_kernel_module_installer]
   metadata {
     labels    = local.wireguard_deployment_labels
     name      = "wireguard-server"
@@ -396,7 +432,9 @@ resource "kubernetes_deployment" "vpn" {
             "pipefail",
             "-c",
             <<-BASH
-              cp -R /run/secrets/wireguard-config/* /config/
+              mkdir /config/wg_confs
+              # The -L flag defereferences symlinks, which is what the mounted secrets are.
+              cp -L -R /run/secrets/wireguard-config/* /config/wg_confs/
             BASH
             ,
           ]
@@ -462,102 +500,69 @@ resource "kubernetes_deployment" "vpn" {
   }
 }
 
-# resource "kubernetes_pod_disruption_budget" "vpn" {
-#   metadata {
-#     name      = "wireguard-server"
-#     namespace = kubernetes_namespace.vpn.metadata[0].name
-#   }
-#   spec {
-#     min_available = 1
-#     selector {
-#       match_labels = local.wireguard_deployment_labels
-#     }
-#   }
-# }
+resource "kubernetes_pod_disruption_budget_v1" "vpn" {
+  metadata {
+    name      = "wireguard-server"
+    namespace = kubernetes_namespace.vpn.metadata[0].name
+  }
+  spec {
+    min_available = 1
+    selector {
+      match_labels = local.wireguard_deployment_labels
+    }
+  }
+}
 
-# resource "kubernetes_service" "vpn" {
-#   metadata {
-#     name      = "wireguard-server"
-#     namespace = kubernetes_namespace.vpn.metadata[0].name
-#     annotations = {
-#       "cloud.google.com/neg" = jsonencode({
-#         ingress = true
-#       })
-#     }
-#   }
-#   spec {
-#     ip_families = [
-#       "IPv4",
-#       "IPv6",
-#     ]
-#     ip_family_policy = "PreferDualStack"
-#     port {
-#       name        = "wireguard"
-#       port        = local.wireguard_server_port
-#       protocol    = "UDP"
-#       target_port = local.wireguard_server_port
-#     }
-#     selector = local.wireguard_deployment_labels
-#     type     = "ClusterIP"
-#   }
-# }
+resource "kubernetes_service" "vpn" {
+  metadata {
+    name      = "wireguard-server"
+    namespace = kubernetes_namespace.vpn.metadata[0].name
+    annotations = {
+      "cloud.google.com/l4-rbs" = "enabled"
+      "cloud.google.com/neg" = jsonencode({
+        ingress = true
+      })
+    }
+  }
+  spec {
+    ip_families = [
+      "IPv4",
+      "IPv6",
+    ]
+    ip_family_policy = "RequireDualStack"
+    port {
+      name        = "wireguard"
+      port        = local.wireguard_server_port
+      protocol    = "UDP"
+      target_port = local.wireguard_server_port
+    }
+    selector = local.wireguard_deployment_labels
+    type     = "ClusterIP"
+  }
+}
 
-# data "google_netblock_ip_ranges" "health_checkers" {
-#   range_type = "health-checkers"
-# }
+data "google_netblock_ip_ranges" "health_checkers" {
+  range_type = "health-checkers"
+}
 
-# data "google_netblock_ip_ranges" "legacy_health_checkers" {
-#   range_type = "legacy-health-checkers"
-# }
+data "google_netblock_ip_ranges" "legacy_health_checkers" {
+  range_type = "legacy-health-checkers"
+}
 
-# locals {
-#   source_ip_ranges = {
-#     ipv4 = concat(
-#       data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv4 != null ? data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv4 : [],
-#       data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv4 != null ? data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv4 : [],
-#       var.allowed_source_ranges_ipv4,
-#     )
-#     ipv6 = concat(
-#       data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv6 != null ? data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv6 : [],
-#       data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv6 != null ? data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv6 : [],
-#       var.allowed_source_ranges_ipv6,
-#     )
-#   }
-# }
-
-# resource "kubernetes_network_policy" "vpn" {
-#   metadata {
-#     name      = "wireguard-server"
-#     namespace = kubernetes_namespace.vpn.metadata[0].name
-#   }
-#   spec {
-#     egress {}
-#     ingress {
-#       dynamic "from" {
-#         for_each = concat(
-#           local.source_ip_ranges.ipv4,
-#           local.source_ip_ranges.ipv6,
-#         )
-#         content {
-#           ip_block {
-#             cidr = from.value
-#           }
-#         }
-#       }
-#       ports {
-#         port     = local.wireguard_server_port
-#         protocol = "UDP"
-#       }
-#     }
-#     pod_selector {
-#       match_labels = local.wireguard_deployment_labels
-#     }
-#     policy_types = [
-#       "Egress",
-#       "Ingress",
-#     ]
-#   }
-# }
+locals {
+  source_ip_ranges = {
+    ipv4 = concat(
+      data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv4 != null ? data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv4 : [],
+      data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv4 != null ? data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv4 : [],
+      var.allowed_source_ranges_ipv4,
+    )
+    ipv6 = concat(
+      data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv6 != null ? data.google_netblock_ip_ranges.health_checkers.cidr_blocks_ipv6 : [],
+      data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv6 != null ? data.google_netblock_ip_ranges.legacy_health_checkers.cidr_blocks_ipv6 : [],
+      var.allowed_source_ranges_ipv6,
+    )
+  }
+}
 
 # # Health check for UDP service
 # resource "google_compute_health_check" "vpn" {
