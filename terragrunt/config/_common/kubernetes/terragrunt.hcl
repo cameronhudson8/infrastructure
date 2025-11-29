@@ -61,7 +61,7 @@ generate "outputs" {
       description = "The URI at which the cluster's control plane can be reached"
       value       = module.kubernetes.control_plane_endpoint
     }
-
+    
     output "node_service_account_name" {
       description = "The name of the GCP service account assigned to the Kubernetes nodes"
       value       = module.kubernetes.node_service_account_name

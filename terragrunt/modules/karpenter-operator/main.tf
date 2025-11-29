@@ -22,9 +22,7 @@ resource "google_service_account_iam_member" "karpenter" {
   service_account_id = var.node_service_account_name
 }
 
-# This does not handle the case in which the clone directory already exists,
-# but with contents from an older git tag.
-data "external" "karpenter_helm_chart" {
+data "external" "git_repo" {
   program = [
     "/usr/bin/env",
     "bash",
@@ -34,38 +32,47 @@ data "external" "karpenter_helm_chart" {
     "-c",
     <<-BASH
       QUERY=$(cat /dev/stdin)
-      echo "\$${QUERY} = $${QUERY}" >&2
+      
+      version=$(jq -er '.version' <<<"$${QUERY}")
 
-      karpenter_version=$(jq -er '.karpenterVersion' <<<"$${QUERY}")
-      echo "\$${karpenter_version} = $${karpenter_version}" >&2
-
-      git_clone_dir="/tmp/repos/karpenter/refs/$${karpenter_version}"
+      git_clone_dir="/tmp/repos/karpenter"
       if [ -d "$${git_clone_dir}" ]; then
         (
           cd "$${git_clone_dir}"
           git fetch --all --quiet
           git reset \
-              --hard "$${karpenter_version}"\
+              --hard "$${version}" \
               --quiet
         )
       else
           mkdir -p "$${git_clone_dir}"
           git clone git@github.com:cloudpilot-ai/karpenter-provider-gcp.git "$${git_clone_dir}" \
-              --branch "$${karpenter_version}" \
+              --branch "$${version}" \
               --depth 1 \
               --quiet
       fi
-      echo "{\"karpenterRepoPath\":\"$${git_clone_dir}\"}"
+      echo "{\"path\":\"$${git_clone_dir}\"}"
     BASH
   ]
   query = {
-    "karpenterVersion" = var.karpenter_version
+    "version" = var.karpenter_version
   }
 }
 
-resource "kubernetes_manifest" "karpenter_crds" {
-  for_each = toset(fileset("${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter/crds", "*.y*ml"))
-  manifest = yamldecode(file("${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter/crds/${each.value}"))
+resource "kubernetes_manifest" "crds" {
+  for_each = {
+    for manifest in [
+      for yaml_file in toset(fileset("${data.external.git_repo.result.path}/charts/karpenter/crds", "**/*.y*ml")) :
+      yamldecode(file("${data.external.git_repo.result.path}/charts/karpenter/crds/${yaml_file}"))
+    ] :
+    join(",", compact([
+      "apiVersion=${manifest.apiVersion}",
+      "kind=${manifest.kind}",
+      contains(keys(manifest.metadata), "namespace") ? "namespace=${manifest.metadata.namespace}" : null,
+      "name=${manifest.metadata.name}",
+    ])) => manifest
+  }
+  manifest = each.value
 }
 
 locals {
@@ -82,7 +89,7 @@ resource "google_project_iam_member" "karpenter_k8s_service_account" {
 resource "helm_release" "karpenter" {
   depends_on = [
     google_project_iam_member.karpenter_k8s_service_account,
-    kubernetes_manifest.karpenter_crds,
+    kubernetes_manifest.crds,
   ]
   chart            = "${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter"
   create_namespace = true
