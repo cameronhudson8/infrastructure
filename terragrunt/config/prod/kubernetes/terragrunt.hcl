@@ -3,5 +3,5 @@ include "backend" {
 }
 
 include "common" {
-  path = "${find_in_parent_folders("_common")}/kubernetes/terragrunt.hcl"
+  path = "${find_in_parent_folders("_common")}/${basename(get_terragrunt_dir())}/terragrunt.hcl"
 }
