@@ -128,6 +128,9 @@ resource "google_container_node_pool" "main" {
     machine_type    = var.node_machine_type
     preemptible     = true
     service_account = google_service_account.nodes.email
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
   }
   node_count     = each.value.node_count
   node_locations = [each.value.zone_name]
