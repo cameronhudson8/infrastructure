@@ -23,47 +23,10 @@ resource "google_service_account_iam_member" "karpenter" {
 }
 
 data "external" "git_repo" {
-  program = [
-    "/usr/bin/env",
-    "bash",
-    "-eu",
-    "-o",
-    "pipefail",
-    "-c",
-    <<-BASH
-      QUERY=$(cat /dev/stdin)
-
-      GIT_REPO_URL='git@github.com:cloudpilot-ai/karpenter-provider-gcp.git'
-      
-      version=$(jq -er '.version' <<<"$${QUERY}")
-
-      git_clone_dir="/tmp/repos/karpenter"
-      if ! [ -d "$${git_clone_dir}" ]; then
-          mkdir -p "$${git_clone_dir}"
-      fi
-      cd "$${git_clone_dir}"
-
-      if [ ! -d '.git' ]; then
-          git init --quiet
-      fi
-
-      if ! git remote get-url origin >/dev/null 2>&1; then
-          git remote add origin "$${GIT_REPO_URL}"
-      fi
-      
-      git fetch origin "$${version}" --quiet
-
-      git checkout "$${version}" --quiet
-      # If the version is a branch, then be sure to pull the latest.
-      if ! [[ "$${version}" =~ ^[a-f0-9]{7,40}$ ]]; then
-          git pull --quiet
-      fi
-
-      echo "{\"path\":\"$${git_clone_dir}\"}"
-    BASH
-  ]
+  program = ["${path.module}/../../scripts/check-out-git-repo.sh"]
   query = {
-    "version" = var.karpenter_version
+    "ref"     = var.karpenter_version
+    "repoUri" = "git@github.com:cert-manager/cert-manager.git"
   }
 }
 
@@ -218,6 +181,9 @@ resource "kubernetes_manifest" "fqdn_network_policy_karpenter_egress_to_google_a
 }
 
 resource "helm_release" "karpenter" {
+  atomic           = true
+  chart            = "${data.external.git_repo.result.path}/charts/karpenter"
+  create_namespace = false
   depends_on = [
     google_project_iam_member.karpenter_k8s_service_account,
     kubernetes_manifest.crds,
@@ -226,11 +192,9 @@ resource "helm_release" "karpenter" {
     kubernetes_network_policy.karpenter_egress_to_node_metadata,
     kubernetes_service_account.karpenter,
   ]
-  chart            = "${data.external.git_repo.result.path}/charts/karpenter"
-  create_namespace = false
-  name             = "karpenter"
-  namespace        = kubernetes_namespace.karpenter.metadata[0].name
-  skip_crds        = true
+  name      = "karpenter"
+  namespace = kubernetes_namespace.karpenter.metadata[0].name
+  skip_crds = true
   values = [
     yamlencode({
       "controller" = {
