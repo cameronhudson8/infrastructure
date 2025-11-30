@@ -32,25 +32,33 @@ data "external" "git_repo" {
     "-c",
     <<-BASH
       QUERY=$(cat /dev/stdin)
+
+      GIT_REPO_URL='git@github.com:cloudpilot-ai/karpenter-provider-gcp.git'
       
       version=$(jq -er '.version' <<<"$${QUERY}")
 
       git_clone_dir="/tmp/repos/karpenter"
-      if [ -d "$${git_clone_dir}" ]; then
-        (
-          cd "$${git_clone_dir}"
-          git fetch --all --quiet
-          git reset \
-              --hard "$${version}" \
-              --quiet
-        )
-      else
+      if ! [ -d "$${git_clone_dir}" ]; then
           mkdir -p "$${git_clone_dir}"
-          git clone git@github.com:cloudpilot-ai/karpenter-provider-gcp.git "$${git_clone_dir}" \
-              --branch "$${version}" \
-              --depth 1 \
-              --quiet
       fi
+      cd "$${git_clone_dir}"
+
+      if [ ! -d '.git' ]; then
+          git init --quiet
+      fi
+
+      if ! git remote get-url origin >/dev/null 2>&1; then
+          git remote add origin "$${GIT_REPO_URL}"
+      fi
+      
+      git fetch origin "$${version}" --quiet
+
+      git checkout "$${version}" --quiet
+      # If the version is a branch, then be sure to pull the latest.
+      if ! [[ "$${version}" =~ ^[a-f0-9]{7,40}$ ]]; then
+          git pull --quiet
+      fi
+
       echo "{\"path\":\"$${git_clone_dir}\"}"
     BASH
   ]
@@ -75,26 +83,153 @@ resource "kubernetes_manifest" "crds" {
   manifest = each.value
 }
 
-locals {
-  namespace                = "karpenter"
-  k8s_service_account_name = "karpenter"
+resource "kubernetes_namespace" "karpenter" {
+  metadata {
+    name = "karpenter"
+  }
+}
+
+resource "kubernetes_service_account" "karpenter" {
+  metadata {
+    annotations = {
+      "iam.gke.io/gcp-service-account" = google_service_account.karpenter.email
+    }
+    name      = "karpenter"
+    namespace = kubernetes_namespace.karpenter.metadata[0].name
+  }
 }
 
 resource "google_project_iam_member" "karpenter_k8s_service_account" {
-  member  = "serviceAccount:${data.google_project.current.project_id}.svc.id.goog[${local.namespace}/${local.k8s_service_account_name}]"
+  member  = "serviceAccount:${data.google_project.current.project_id}.svc.id.goog[${kubernetes_service_account.karpenter.metadata[0].namespace}/${kubernetes_service_account.karpenter.metadata[0].name}]"
   project = data.google_project.current.id
   role    = "roles/iam.workloadIdentityUser"
+}
+
+data "kubernetes_endpoints_v1" "kubernetes" {
+  metadata {
+    name      = "kubernetes"
+    namespace = "default"
+  }
+}
+
+resource "kubernetes_network_policy" "karpenter_egress_to_control_plane" {
+  metadata {
+    name      = "karpenter-egress-to-kubernetes"
+    namespace = kubernetes_namespace.karpenter.metadata[0].name
+  }
+  spec {
+    egress {
+      ports {
+        port     = 443
+        protocol = "TCP"
+      }
+      to {
+        dynamic "ip_block" {
+          for_each = flatten([
+            for subset in data.kubernetes_endpoints_v1.kubernetes.subset : [
+              for address in subset.address : address.ip
+            ]
+          ])
+          content {
+            cidr = "${ip_block.value}/32"
+          }
+        }
+      }
+    }
+    egress {
+      ports {
+        port     = 80
+        protocol = "TCP"
+      }
+      to {
+        ip_block {
+          cidr = "169.254.169.254/32"
+        }
+      }
+    }
+    pod_selector {}
+    policy_types = ["Egress"]
+  }
+}
+
+resource "kubernetes_network_policy" "karpenter_egress_to_node_metadata" {
+  metadata {
+    name      = "karpenter-egress-to-node-metadata"
+    namespace = kubernetes_namespace.karpenter.metadata[0].name
+  }
+  spec {
+    egress {
+      ports {
+        port     = 443
+        protocol = "TCP"
+      }
+      to {
+        dynamic "ip_block" {
+          for_each = flatten([
+            for subset in data.kubernetes_endpoints_v1.kubernetes.subset : [
+              for address in subset.address : address.ip
+            ]
+          ])
+          content {
+            cidr = "${ip_block.value}/32"
+          }
+        }
+      }
+    }
+    egress {
+      ports {
+        port     = 80
+        protocol = "TCP"
+      }
+      to {
+        ip_block {
+          cidr = "169.254.169.254/32"
+        }
+      }
+    }
+    pod_selector {}
+    policy_types = ["Egress"]
+  }
+}
+
+resource "kubernetes_manifest" "fqdn_network_policy_karpenter_egress_to_google_apis" {
+  manifest = {
+    "apiVersion" = "networking.gke.io/v1alpha1"
+    "kind"       = "FQDNNetworkPolicy"
+    "metadata" = {
+      "name"      = "karpenter"
+      "namespace" = "karpenter"
+    }
+    "spec" = {
+      "egress" = [{
+        "matches" = [
+          { "name" = "gcloud-compute.com" },
+          { "pattern" = "*.googleapis.com" },
+        ]
+        "ports" = [{
+          "port"     = 443
+          "protocol" = "TCP"
+        }]
+      }]
+      "podSelector" = {}
+
+    }
+  }
 }
 
 resource "helm_release" "karpenter" {
   depends_on = [
     google_project_iam_member.karpenter_k8s_service_account,
     kubernetes_manifest.crds,
+    kubernetes_manifest.fqdn_network_policy_karpenter_egress_to_google_apis,
+    kubernetes_network_policy.karpenter_egress_to_control_plane,
+    kubernetes_network_policy.karpenter_egress_to_node_metadata,
+    kubernetes_service_account.karpenter,
   ]
-  chart            = "${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter"
-  create_namespace = true
+  chart            = "${data.external.git_repo.result.path}/charts/karpenter"
+  create_namespace = false
   name             = "karpenter"
-  namespace        = local.namespace
+  namespace        = kubernetes_namespace.karpenter.metadata[0].name
   skip_crds        = true
   values = [
     yamlencode({
@@ -109,10 +244,8 @@ resource "helm_release" "karpenter" {
         "enabled" = false
       }
       "serviceAccount" = {
-        "annotations" = {
-          "iam.gke.io/gcp-service-account" = google_service_account.karpenter.email
-        }
-        "name" = local.k8s_service_account_name
+        "create" = false
+        "name"   = kubernetes_service_account.karpenter.metadata[0].name
       }
     }),
   ]

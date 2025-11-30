@@ -35,6 +35,7 @@ resource "google_container_cluster" "main" {
     google_project_iam_member.nodes,
   ]
   enable_cilium_clusterwide_network_policy = true
+  enable_fqdn_network_policy               = true
   enable_l4_ilb_subsetting                 = true
   initial_node_count                       = 1
   ip_allocation_policy {
@@ -69,8 +70,12 @@ resource "google_container_cluster" "main" {
     }
   }
   private_cluster_config {
-    enable_private_nodes   = true
-    master_ipv4_cidr_block = var.kubernetes_control_plane_ipv4_cidr
+    # This property is incorrectly named; if true, it *disables* the public
+    # endpoint. If false, then both the public and private endpoints are
+    # enabled.
+    enable_private_endpoint = false
+    enable_private_nodes    = true
+    master_ipv4_cidr_block  = var.kubernetes_control_plane_ipv4_cidr
   }
   resource_labels = {
     env = var.env_name
