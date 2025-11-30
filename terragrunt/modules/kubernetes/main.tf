@@ -16,6 +16,55 @@ resource "google_project_iam_member" "nodes" {
   role    = each.value
 }
 
+data "google_compute_subnetwork" "private" {
+  name = "private"
+}
+
+resource "google_compute_firewall" "allow_control_plane_to_nodes" {
+  allow {
+    protocol = "all"
+  }
+  description        = "Allow Kubernetes control plane to Kubernetes nodes"
+  destination_ranges = [data.google_compute_subnetwork.private.ip_cidr_range]
+  direction          = "INGRESS"
+  name               = "allow-ipv4-ingress-from-control-plane-to-nodes"
+  network            = var.vpc_name
+  priority           = 1000
+  source_ranges      = [var.kubernetes_control_plane_ipv4_cidr]
+}
+
+resource "google_compute_firewall" "allow_control_plane_to_services" {
+  allow {
+    protocol = "all"
+  }
+  description = "Allow Kubernetes control plane to Kubernetes services"
+  destination_ranges = [
+    for secondary_range in data.google_compute_subnetwork.private.secondary_ip_range :
+    secondary_range.ip_cidr_range if secondary_range.range_name == var.kubernetes_services_subnet_secondary_range_name
+  ]
+  direction     = "INGRESS"
+  name          = "allow-ipv4-ingress-from-control-plane-to-services"
+  network       = var.vpc_name
+  priority      = 1000
+  source_ranges = [var.kubernetes_control_plane_ipv4_cidr]
+}
+
+resource "google_compute_firewall" "allow_control_plane_to_pods" {
+  allow {
+    protocol = "all"
+  }
+  description = "Allow Kubernetes control plane to Kubernetes pods"
+  destination_ranges = [
+    for secondary_range in data.google_compute_subnetwork.private.secondary_ip_range :
+    secondary_range.ip_cidr_range if secondary_range.range_name == var.kubernetes_pods_subnet_secondary_range_name
+  ]
+  direction     = "INGRESS"
+  name          = "allow-ipv4-ingress-from-control-plane-to-pods"
+  network       = var.vpc_name
+  priority      = 1000
+  source_ranges = [var.kubernetes_control_plane_ipv4_cidr]
+}
+
 data "google_compute_zones" "available" {}
 
 resource "google_container_cluster" "main" {
@@ -35,6 +84,7 @@ resource "google_container_cluster" "main" {
     google_project_iam_member.nodes,
   ]
   enable_cilium_clusterwide_network_policy = true
+  enable_fqdn_network_policy               = true
   enable_l4_ilb_subsetting                 = true
   initial_node_count                       = 1
   ip_allocation_policy {
@@ -69,8 +119,11 @@ resource "google_container_cluster" "main" {
     }
   }
   private_cluster_config {
-    enable_private_nodes   = true
-    master_ipv4_cidr_block = var.kubernetes_control_plane_ipv4_cidr
+    # This property is misnamed. If true, it disables the public endpoint. If
+    # false, it allows both the public and private endpoints.
+    enable_private_endpoint = false
+    enable_private_nodes    = true
+    master_ipv4_cidr_block  = var.kubernetes_control_plane_ipv4_cidr
   }
   resource_labels = {
     env = var.env_name

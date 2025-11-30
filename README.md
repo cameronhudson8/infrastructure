@@ -39,6 +39,7 @@ Modules:
     * `default-network-policies`
     * `karpenter-operator`
     * `karpenter-node-pools`
+    * `cert-manager`
     * (TODO) `vpn`
     * `ingress-nginx`
     * (TODO) `ci-cd`

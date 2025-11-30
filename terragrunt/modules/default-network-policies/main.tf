@@ -1,5 +1,5 @@
 # Based on https://docs.cilium.io/en/latest/network/servicemesh/default-deny-ingress-policy/
-resource "kubernetes_manifest" "cilium_network_poilicy_deny_by_default" {
+resource "kubernetes_manifest" "cilium_network_policy_deny_by_default" {
   manifest = {
     "apiVersion" = "cilium.io/v2"
     "kind"       = "CiliumClusterwideNetworkPolicy"

@@ -47,6 +47,7 @@
 # ++ (Reserved) "Broadcast address" |  10.255.255.255/32 | 10.255.255.255 | 2 ^ 0
 
 cert_manager_version = "1.19.1"
+dns_zones            = ["cameronhudson8.com"]
 env_name             = "staging"
 # I currently only have 1 GCP project. Reconsider later.
 gcp_project_id                     = "cameronhudson8"

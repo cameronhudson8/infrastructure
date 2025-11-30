@@ -55,8 +55,10 @@ generate "providers" {
 generate "main" {
   contents  = <<-EOF
     module "cert_manager" {
-      cert_manager_version = ${jsonencode(local.env_vars.cert_manager_version)}
-      source               = "${find_in_parent_folders("modules")}/cert-manager"
+      cert_manager_version               = ${jsonencode(local.env_vars.cert_manager_version)}
+      dns_zones                          = ${jsonencode(local.env_vars.dns_zones)}
+      kubernetes_control_plane_cidr_ipv4 = ${jsonencode(local.env_vars.kubernetes_control_plane_ipv4_cidr)}
+      source                             = "${find_in_parent_folders("modules")}/cert-manager"
     }
   EOF
   if_exists = "overwrite_terragrunt"
