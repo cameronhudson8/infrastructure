@@ -80,6 +80,7 @@ resource "google_project_iam_member" "karpenter_k8s_service_account" {
 }
 
 resource "helm_release" "karpenter" {
+  atomic           = true
   depends_on = [
     google_project_iam_member.karpenter_k8s_service_account,
     kubernetes_manifest.karpenter_crds,
