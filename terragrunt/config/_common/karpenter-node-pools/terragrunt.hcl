@@ -48,7 +48,8 @@ generate "providers" {
 generate "main" {
   contents  = <<-EOF
     module "karpenter_node_pools" {
-      source = "${find_in_parent_folders("modules")}/karpenter-node-pools"
+      node_service_account_name = ${jsonencode(dependency.kubernetes.outputs.node_service_account_name)}
+      source                    = "${find_in_parent_folders("modules")}/karpenter-node-pools"
     }
   EOF
   if_exists = "overwrite_terragrunt"

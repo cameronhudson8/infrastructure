@@ -5,6 +5,10 @@ locals {
   }
 }
 
+data "google_service_account" "nodes" {
+  account_id = var.node_service_account_name
+}
+
 resource "kubernetes_manifest" "node_class_main" {
   manifest = {
     apiVersion = "${local.node_class_api_version.group}/${local.node_class_api_version.kind}"
@@ -16,6 +20,7 @@ resource "kubernetes_manifest" "node_class_main" {
       imageSelectorTerms = [
         { alias = "ContainerOptimizedOS@latest" },
       ]
+      serviceAccount = data.google_service_account.nodes.email
     }
   }
 }
