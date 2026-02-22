@@ -30,7 +30,7 @@ Terraform code for creating cloud infrastructure where applications are deployed
 Apply the Terraform modules in the following order.
 
 ```
-terragrunt apply --working-dir ./terragrunt/<module>
+terragrunt apply --working-dir ./terragrunt/config/<env-name>/<module>
 ```
 Modules:
 1. `vpc`
