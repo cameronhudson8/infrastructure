@@ -21,7 +21,7 @@ generate "terraform" {
         }
         kubernetes = {
           source  = "hashicorp/kubernetes"
-          version = "~> 2.0"
+          version = "~> 3.0"
         }
       }
       required_version = "~> 1.0"
@@ -62,6 +62,7 @@ generate "main" {
       cluster_location          = ${jsonencode(local.env_vars.kubernetes_cluster_location)}
       cluster_name              = ${jsonencode(local.env_vars.kubernetes_cluster_name)}
       karpenter_version         = ${jsonencode(local.env_vars.karpenter_version)}
+      kubernetes_version        = ${jsonencode(dependency.kubernetes.outputs.kubernetes_version)}
       node_service_account_name = ${jsonencode(dependency.kubernetes.outputs.node_service_account_name)}
       source                    = "${find_in_parent_folders("modules")}/karpenter-operator"
     }
