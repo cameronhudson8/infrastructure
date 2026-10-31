@@ -15,6 +15,8 @@ Terraform code for creating cloud infrastructure where applications are deployed
 
 1. To use this repo, an existing Google Cloud Storage (GCS) bucket needed in order to store the Terraform state. You can create such a bucket with the following commands.
     ```
+    gcloud auth login
+
     ENV_NAME="staging"
     gcloud storage buckets create "gs://cameronhudson8-${ENV_NAME}-tf-state" \
         --location 'us-west4' \
@@ -27,26 +29,29 @@ Terraform code for creating cloud infrastructure where applications are deployed
 
 ## Usage
 
-Apply the Terraform modules in the following order.
-
-```
-terragrunt apply --working-dir ./terragrunt/config/<env-name>/<module>
-```
-Modules:
-1. `vpc`
-1. `kubernetes`
-1. In-cluster content
-    * `default-network-policies`
-    * `karpenter-operator`
-    * `karpenter-node-pools`
-    * (TODO) `vpn`
-    * `ingress-nginx`
-    * (TODO) `ci-cd`
-    * (TODO) `identity`
-    * (TODO) `secrets`
-    * Observability
-        1. `monitoring-crds`
-        1. `monitoring`
+1. Set the GCP application-default credentials.
+    ```
+    gcloud auth application-default login
+    ```
+1. Apply the Terraform modules in the following order.
+    ```
+    terragrunt apply --working-dir ./terragrunt/config/<env-name>/<module>
+    ```
+    Modules:
+    1. `vpc`
+    1. `kubernetes`
+    1. In-cluster content
+        * `default-network-policies`
+        * `karpenter-operator`
+        * `karpenter-node-pools`
+        * (TODO) `vpn`
+        * `ingress-nginx`
+        * (TODO) `ci-cd`
+        * (TODO) `identity`
+        * (TODO) `secrets`
+        * Observability
+            1. `monitoring-crds`
+            1. `monitoring`
 
 ## Cleanup
 
