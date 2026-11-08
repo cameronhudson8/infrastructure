@@ -8,7 +8,7 @@ jobs:
   pr:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cameronhudson8/pipeline-containers:2025-08-02T21-56-59Z
+      image: ghcr.io/cameronhudson8/pipeline-containers:2026-11-09T04-51-47Z
     steps:
       - name: Checkout
         uses: actions/checkout@v7

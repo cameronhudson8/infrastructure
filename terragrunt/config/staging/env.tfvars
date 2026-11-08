@@ -49,6 +49,7 @@
 env_name = "staging"
 # I currently only have 1 GCP project. Reconsider later.
 gcp_project_id                     = "cameronhudson8"
+gcp_project_owner_email            = "cameronhudson8@gmail.com"
 gcp_region                         = "us-central1"
 ingress_nginx_helm_chart_version   = "4.15.1"
 ingress_nginx_service_type         = "LoadBalancer"
@@ -62,14 +63,14 @@ kubernetes_services_ipv4_cidr      = "10.254.0.0/16"
 kubernetes_version                 = "1.36"
 load_balancers_ipv4_cidr           = "10.255.255.248/29"
 node_count                         = 3
-node_machine_type                  = "e2-standard-2"
+node_machine_type                  = "c3d-highcpu-4"
 observability = {
-  fluentd_version                      = "v1.20"
+  fluentd_version                      = "1.19"
   grafana_helm_chart_version           = "14.4.0"
   kube_prometheus_version              = "93.1.0"
-  loki_helm_chart_version              = "7.5.0"
-  mimir_distributed_helm_chart_version = "5.5.1"
-  tempo_distributed_helm_chart_version = "3.2.1"
+  loki_helm_chart_version              = "21.0.0"
+  mimir_distributed_helm_chart_version = "6.2.2"
+  tempo_distributed_helm_chart_version = "3.27.0"
 }
 tf_state_bucket_name = "cameronhudson8-staging-tf-state"
 vpa_operator_version = "1.8.1"

@@ -36,6 +36,13 @@ generate "providers" {
 
     data "google_client_config" "current" {}
 
+    provider "helm" {
+      kubernetes = {
+        host  = ${jsonencode(dependency.kubernetes.outputs.control_plane_endpoint)}
+        token = data.google_client_config.current.access_token
+      }
+    }
+
     provider "kubernetes" {
       host  = ${jsonencode(dependency.kubernetes.outputs.control_plane_endpoint)}
       token = data.google_client_config.current.access_token
@@ -56,7 +63,8 @@ generate "main" {
       fluentd_version                      = ${jsonencode(local.env_vars.observability.fluentd_version)}
       grafana_helm_chart_version           = ${jsonencode(local.env_vars.observability.grafana_helm_chart_version)}
       kube_prometheus_version              = ${jsonencode(local.env_vars.observability.kube_prometheus_version)}
-      loki_helm_chart_version              = ${jsonencode(local.env_vars.observability.loki_distributed_helm_chart_version)}
+      kubernetes_version                   = ${jsonencode(local.env_vars.kubernetes_version)}
+      loki_helm_chart_version              = ${jsonencode(local.env_vars.observability.loki_helm_chart_version)}
       mimir_distributed_helm_chart_version = ${jsonencode(local.env_vars.observability.mimir_distributed_helm_chart_version)}
       source                               = "${find_in_parent_folders("modules")}/observability"
       tempo_distributed_helm_chart_version = ${jsonencode(local.env_vars.observability.tempo_distributed_helm_chart_version)}

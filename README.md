@@ -33,6 +33,11 @@ Terraform code for creating cloud infrastructure where applications are deployed
     ```
     gcloud auth application-default login
     ```
+1. Set the quota project and enable the Quotas API.
+    ```
+    gcloud auth application-default set-quota-project cameronhudson8
+    gcloud services enable cloudquotas.googleapis.com --project=cameronhudson8
+    ```
 1. Apply the Terraform modules in the following order.
     ```
     terragrunt apply --working-dir ./terragrunt/config/<env-name>/<module>

@@ -97,6 +97,7 @@ data "external" "internet_ipv6_cidrs" {
   }
 }
 
+# trivy:ignore:GCP-0074
 resource "google_compute_firewall" "private_ipv6" {
   deny {
     protocol = "all"

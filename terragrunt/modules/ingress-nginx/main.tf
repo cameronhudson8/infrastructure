@@ -26,7 +26,7 @@ resource "helm_release" "ingress_nginx" {
 
 # Monitoring
 
-resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
+resource "kubernetes_cluster_role_v1" "monitoring_ingress_nginx" {
   metadata {
     name = "monitoring-ingress-nginx"
   }
@@ -63,14 +63,14 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
   }
 }
 
-resource "kubernetes_cluster_role_binding" "prometheus_monitoring_ingress_nginx" {
+resource "kubernetes_cluster_role_binding_v1" "prometheus_monitoring_ingress_nginx" {
   metadata {
     name = "prometheus-monitoring-ingress-nginx"
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "monitoring-ingress-nginx"
+    name      = kubernetes_cluster_role_v1.monitoring_ingress_nginx.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"

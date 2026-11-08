@@ -39,6 +39,11 @@ variable "kube_prometheus_version" {
   type        = string
 }
 
+variable "kubernetes_version" {
+  description = "The version of the Kubernetes control plane and nodes"
+  type        = string
+}
+
 variable "loki_helm_chart_version" {
   description = "The version of the loki helm chart to use"
   type        = string

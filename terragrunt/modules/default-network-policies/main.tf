@@ -17,6 +17,13 @@ resource "kubernetes_manifest" "cilium_network_poilicy_deny_by_default" {
                 k8s-app                       = "kube-dns"
               }
             },
+            # GKE redirects DNS queries to the node-local cache before they reach kube-dns.
+            {
+              matchLabels = {
+                "io.kubernetes.pod.namespace" = "kube-system"
+                k8s-app                       = "node-local-dns"
+              }
+            },
           ]
           toPorts = [
             {

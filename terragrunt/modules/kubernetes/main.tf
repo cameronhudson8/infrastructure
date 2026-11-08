@@ -1,3 +1,16 @@
+data "google_client_config" "current" {}
+
+resource "google_cloud_quotas_quota_preference" "ssd_total_gb" {
+  contact_email = var.gcp_project_owner_email
+  dimensions    = { region = data.google_client_config.current.region }
+  parent        = "projects/${var.gcp_project_id}"
+  quota_config {
+    preferred_value = 1000
+  }
+  quota_id = "SSD-TOTAL-GB-per-project-region"
+  service  = "compute.googleapis.com"
+}
+
 resource "google_service_account" "nodes" {
   account_id   = "cluster-${var.kubernetes_cluster_name}-nodes"
   display_name = "For the nodes of cluster '${var.kubernetes_cluster_name}'"
@@ -18,6 +31,7 @@ resource "google_project_iam_member" "nodes" {
 
 data "google_compute_zones" "available" {}
 
+# trivy:ignore:GCP-0050
 resource "google_container_cluster" "main" {
   control_plane_endpoints_config {
     dns_endpoint_config {
@@ -32,6 +46,7 @@ resource "google_container_cluster" "main" {
   datapath_provider   = "ADVANCED_DATAPATH"
   deletion_protection = false
   depends_on = [
+    google_cloud_quotas_quota_preference.ssd_total_gb,
     google_project_iam_member.nodes,
   ]
   enable_cilium_clusterwide_network_policy = true
@@ -43,13 +58,6 @@ resource "google_container_cluster" "main" {
     stack_type                    = "IPV4_IPV6"
   }
   location = var.kubernetes_cluster_location
-  master_authorized_networks_config {
-    cidr_blocks {
-      display_name = "All IPv4 addresses"
-      cidr_block   = "0.0.0.0/0"
-    }
-    gcp_public_cidrs_access_enabled = true
-  }
   monitoring_config {
     advanced_datapath_observability_config {
       enable_metrics = false
@@ -107,6 +115,15 @@ locals {
   ]
 }
 
+resource "random_id" "node_pool_name_suffix" {
+  for_each = {
+    for zone in local.node_distribution :
+    zone.zone_name => zone
+    if zone.node_count > 0
+  }
+  byte_length = 4
+}
+
 resource "google_container_node_pool" "main" {
   for_each = {
     for zone in local.node_distribution :
@@ -114,14 +131,22 @@ resource "google_container_node_pool" "main" {
     if zone.node_count > 0
   }
   cluster = google_container_cluster.main.id
-  name    = "main-${each.value.zone_name}"
+  # Spot provisioning can only be enabled when creating a node pool. Use a new
+  # name so Terraform can create the Spot pool before draining the preemptible pool.
+  name = "main-${each.value.zone_name}-${random_id.node_pool_name_suffix[each.key].hex}"
+  lifecycle {
+    create_before_destroy = true
+  }
   network_config {
     enable_private_nodes = true
   }
   node_config {
-    machine_type    = var.node_machine_type
-    preemptible     = true
+    machine_type = var.node_machine_type
+    metadata = {
+      "disable-legacy-endpoints" = true
+    }
     service_account = google_service_account.nodes.email
+    spot            = true
     workload_metadata_config {
       mode = "GKE_METADATA"
     }

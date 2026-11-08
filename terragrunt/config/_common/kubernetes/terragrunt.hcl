@@ -26,8 +26,10 @@ generate "terraform" {
 generate "providers" {
   contents  = <<-EOF
     provider "google" {
-      project = "${local.env_vars.gcp_project_id}"
-      region  = "${local.env_vars.gcp_region}"
+      billing_project       = "${local.env_vars.gcp_project_id}"
+      project               = "${local.env_vars.gcp_project_id}"
+      region                = "${local.env_vars.gcp_region}"
+      user_project_override = true
     }
   EOF
   if_exists = "overwrite_terragrunt"
@@ -39,6 +41,7 @@ generate "main" {
     module "kubernetes" {
       env_name                                        = ${jsonencode(local.env_vars.env_name)}
       gcp_project_id                                  = ${jsonencode(local.env_vars.gcp_project_id)}
+      gcp_project_owner_email                         = ${jsonencode(local.env_vars.gcp_project_owner_email)}
       kubernetes_cluster_location                     = ${jsonencode(local.env_vars.kubernetes_cluster_location)}
       kubernetes_cluster_name                         = ${jsonencode(local.env_vars.kubernetes_cluster_name)}
       kubernetes_cluster_subnet_name                  = ${jsonencode(dependency.vpc.outputs.kubernetes_cluster_subnet_name)}
