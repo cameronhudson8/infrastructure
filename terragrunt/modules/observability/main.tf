@@ -1,53 +1,4 @@
-resource "kubernetes_namespace" "monitoring" {
-  metadata {
-    name = var.namespace_name
-  }
-}
-
-locals {
-  alertmanager_global_config_name = "global"
-  alertmanager_config_name        = "main"
-}
-
-// Lima doesn't create a kube-controller-manager service. I haven't figured out why.
-resource "kubernetes_service" "kube_controller_manager" {
-  metadata {
-    labels = {
-      "app.kubernetes.io/name" = "kube-controller-manager"
-    }
-    name      = "kube-controller-manager"
-    namespace = "kube-system"
-  }
-  spec {
-    port {
-      name = "https-metrics"
-      port = 10257
-    }
-    selector = {
-      component = "kube-controller-manager"
-    }
-  }
-}
-
-// Lima doesn't create a kube-scheduler service. I haven't figured out why.
-resource "kubernetes_service" "kube_scheduler" {
-  metadata {
-    labels = {
-      "app.kubernetes.io/name" = "kube-scheduler"
-    }
-    name      = "kube-scheduler"
-    namespace = "kube-system"
-  }
-  spec {
-    port {
-      name = "https-metrics"
-      port = 10259
-    }
-    selector = {
-      component = "kube-scheduler"
-    }
-  }
-}
+# Unnamespaced resources (including CRDs)
 
 data "external" "kube_prometheus_prepare_manifests" {
   program = [
@@ -411,6 +362,7 @@ resource "kubernetes_secret" "email_sender_creds" {
 
 
 resource "kubernetes_manifest" "alertmanager_config_global" {
+  depends_on = [kubernetes_manifest.kube_prometheus_crds]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
     kind       = "AlertmanagerConfig"
@@ -435,6 +387,7 @@ resource "kubernetes_manifest" "alertmanager_config_global" {
 }
 
 resource "kubernetes_manifest" "alertmanager_config" {
+  depends_on = [kubernetes_manifest.kube_prometheus_crds]
   manifest = {
     apiVersion = "monitoring.coreos.com/v1alpha1"
     kind       = "AlertmanagerConfig"
@@ -452,68 +405,46 @@ resource "kubernetes_manifest" "alertmanager_config" {
             "alertname",
             "namespace",
           ]
-          sourceMatchers = [
-            "severity=\"critical\"",
-          ]
-          targetMatchers = [
-            "severity=~\"warning|info\"",
-          ]
+          sourceMatchers = ["severity=\"critical\""]
+          targetMatchers = ["severity=~\"warning|info\""]
         },
         {
           equal = [
             "alertname",
             "namespace",
           ]
-          sourceMatchers = [
-            "severity=\"warning\"",
-          ]
-          targetMatchers = [
-            "severity=\"info\"",
-          ]
+          sourceMatchers = ["severity=\"warning\""]
+          targetMatchers = ["severity=\"info\""]
         },
         {
-          equal = [
-            "namespace",
-          ]
-          sourceMatchers = [
-            "alertname=\"InfoInhibitor\"",
-          ]
-          targetMatchers = [
-            "severity=\"info\"",
-          ]
+          equal          = ["namespace"]
+          sourceMatchers = ["alertname=\"InfoInhibitor\""]
+          targetMatchers = ["severity=\"info\""]
         },
       ]
       receivers = [
+        { name = "null" },
         {
-          name = "null"
-        },
-        {
-          emailConfigs = [
-            {
-              authPassword = {
-                name = kubernetes_secret.email_sender_creds.metadata[0].name
-                key  = "password"
-              }
-              authUsername = var.email_sender_email_address
-              headers = [
-                {
-                  key   = "subject"
-                  value = "Prometheus Alert"
-                }
-              ]
-              from         = var.email_sender_email_address
-              sendResolved = true
-              smarthost    = var.email_sender_transport
-              to           = var.email_recipient_email_address
+          emailConfigs = [{
+            authPassword = {
+              name = kubernetes_secret.email_sender_creds.metadata[0].name
+              key  = "password"
             }
-          ]
+            authUsername = var.email_sender_email_address
+            headers = [{
+              key   = "subject"
+              value = "Prometheus Alert"
+            }]
+            from         = var.email_sender_email_address
+            sendResolved = true
+            smarthost    = var.email_sender_transport
+            to           = var.email_recipient_email_address
+          }]
           name = "email"
-        }
+        },
       ]
       route = {
-        groupBy = [
-          "namespace",
-        ]
+        groupBy        = ["namespace"]
         groupInterval  = "5m"
         groupWait      = "30s"
         receiver       = "null"
@@ -521,32 +452,26 @@ resource "kubernetes_manifest" "alertmanager_config" {
         routes = [
           {
             continue = false
-            matchers = [
-              {
-                matchType = "="
-                name      = "alertname"
-                value     = "Watchdog"
-              }
-            ]
+            matchers = [{
+              matchType = "="
+              name      = "alertname"
+              value     = "Watchdog"
+            }]
             receiver = "null"
           },
           {
             continue = false
-            matchers = [
-              {
-                matchType = "="
-                name      = "alertname"
-                value     = "InfoInhibitor"
-              }
-            ]
+            matchers = [{
+              matchType = "="
+              name      = "alertname"
+              value     = "InfoInhibitor"
+            }]
             receiver = "null"
           },
           {
-            groupBy = [
-              "job",
-            ]
+            groupBy  = ["job"]
             receiver = "email"
-          }
+          },
         ]
       }
     }
@@ -554,9 +479,7 @@ resource "kubernetes_manifest" "alertmanager_config" {
 }
 
 resource "kubernetes_manifest" "kube_prometheus_setup" {
-  depends_on = [
-    kubernetes_manifest.alertmanager_config,
-  ]
+  depends_on = [kubernetes_manifest.alertmanager_config]
   for_each = {
     for manifest in [
       for _manifest in [
@@ -757,9 +680,7 @@ resource "terraform_data" "host_paths" {
 }
 
 resource "kubernetes_persistent_volume" "mimir_volumes" {
-  for_each = {
-    for volume in local.mimir_volumes : volume.pvc_name => volume
-  }
+  for_each = { for volume in local.mimir_volumes : volume.pvc_name => volume }
   metadata {
     name = each.value.pv_name
   }
@@ -795,9 +716,7 @@ resource "kubernetes_persistent_volume" "mimir_volumes" {
 }
 
 resource "helm_release" "mimir" {
-  depends_on = [
-    terraform_data.host_paths,
-  ]
+  depends_on = [terraform_data.host_paths]
   chart      = "mimir-distributed"
   name       = "mimir"
   namespace  = kubernetes_namespace_v1.observability.metadata[0].name
@@ -958,244 +877,244 @@ module "fluentd" {
   source                     = "./fluentd"
 }
 
-# Create a VPA (with mode: "Off") for each workload.
+# # Create a VPA (with mode: "Off") for each workload.
 
-# This list was generated manually with the command below.
-# TODO: Automate this somehow. Maybe the dependencies have a feature that deploys VPAs.
-#     kubectl get pod \
-#         --context local \
-#         --namespace monitoring \
-#         --output yaml \
-#     | yq \
-#         --exit-status \
-#         --output-format json \
-#         '
-#             .
-#             | .items
-#             | map(.metadata.ownerReferences[0])
-#             | map({ "apiVersion": .apiVersion, "kind": .kind, "name": .name })
-#             | map(
-#                 .
-#                 | with(
-#                     select(.kind == "ReplicaSet");
-#                     .
-#                     | .kind = "Deployment"
-#                     | .name = (.name | sub("-\\w+$"; ""))
-#                 )
-#                 | with(
-#                     select(.name == "alertmanager-main");
-#                     .
-#                     | .apiVersion = "monitoring.coreos.com/v1"
-#                     | .kind = "Alertmanager"
-#                     | .name = "main"
-#                 )
-#                 | with(
-#                     select(.name == "prometheus-k8s");
-#                     .
-#                     | .apiVersion = "monitoring.coreos.com/v1"
-#                     | .kind = "Prometheus"
-#                     | .name = "k8s"
-#                 )
-#             )
-#             | unique_by(.)
-#             | sort_by(.apiVersion, .kind, .name)
-#          ' \
-#     | sed -E 's/"(.+)":/\1 =/g'
-locals {
-  vpa_configs = concat(
-    [
-      {
-        apiVersion = "apps/v1"
-        kind       = "DaemonSet"
-        name       = "node-exporter"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "blackbox-exporter"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "grafana"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "kube-state-metrics"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "loki-loki-distributed-distributor"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "loki-loki-distributed-gateway"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "loki-loki-distributed-query-frontend"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-distributor"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-minio"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-nginx"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-overrides-exporter"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-querier"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-query-frontend"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-query-scheduler"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-rollout-operator"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "mimir-ruler"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "prometheus-adapter"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "prometheus-operator"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "tempo-compactor"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "tempo-distributor"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "tempo-querier"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "Deployment"
-        name       = "tempo-query-frontend"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "loki-loki-distributed-ingester"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "loki-loki-distributed-querier"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-alertmanager"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-compactor"
-      },
-    ],
-    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
-    ? [
-      for zone in ["a", "b", "c"] :
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-ingester-zone-${zone}"
-      }
-    ]
-    : [
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-ingester"
-      },
-    ],
-    (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
-    ? [
-      for zone in ["a", "b", "c"] :
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-store-gateway-zone-${zone}"
-      }
-    ]
-    : [
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "mimir-store-gateway"
-      },
-    ],
-    [
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "tempo-ingester"
-      },
-      {
-        apiVersion = "apps/v1"
-        kind       = "StatefulSet"
-        name       = "tempo-memcached"
-      },
-      {
-        apiVersion = "batch/v1"
-        kind       = "Job"
-        name       = "mimir-make-minio-buckets-5.3.0"
-      },
-      {
-        apiVersion = "monitoring.coreos.com/v1"
-        kind       = "Alertmanager"
-        name       = "main"
-      },
-      {
-        apiVersion = "monitoring.coreos.com/v1"
-        kind       = "Prometheus"
-        name       = "k8s"
-      }
-    ]
-  )
-}
+# # This list was generated manually with the command below.
+# # TODO: Automate this somehow. Maybe the dependencies have a feature that deploys VPAs.
+# #     kubectl get pod \
+# #         --context local \
+# #         --namespace monitoring \
+# #         --output yaml \
+# #     | yq \
+# #         --exit-status \
+# #         --output-format json \
+# #         '
+# #             .
+# #             | .items
+# #             | map(.metadata.ownerReferences[0])
+# #             | map({ "apiVersion": .apiVersion, "kind": .kind, "name": .name })
+# #             | map(
+# #                 .
+# #                 | with(
+# #                     select(.kind == "ReplicaSet");
+# #                     .
+# #                     | .kind = "Deployment"
+# #                     | .name = (.name | sub("-\\w+$"; ""))
+# #                 )
+# #                 | with(
+# #                     select(.name == "alertmanager-main");
+# #                     .
+# #                     | .apiVersion = "monitoring.coreos.com/v1"
+# #                     | .kind = "Alertmanager"
+# #                     | .name = "main"
+# #                 )
+# #                 | with(
+# #                     select(.name == "prometheus-k8s");
+# #                     .
+# #                     | .apiVersion = "monitoring.coreos.com/v1"
+# #                     | .kind = "Prometheus"
+# #                     | .name = "k8s"
+# #                 )
+# #             )
+# #             | unique_by(.)
+# #             | sort_by(.apiVersion, .kind, .name)
+# #          ' \
+# #     | sed -E 's/"(.+)":/\1 =/g'
+# locals {
+#   vpa_configs = concat(
+#     [
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "DaemonSet"
+#         name       = "node-exporter"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "blackbox-exporter"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "grafana"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "kube-state-metrics"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "loki-loki-distributed-distributor"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "loki-loki-distributed-gateway"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "loki-loki-distributed-query-frontend"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-distributor"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-minio"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-nginx"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-overrides-exporter"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-querier"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-query-frontend"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-query-scheduler"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-rollout-operator"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "mimir-ruler"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "prometheus-adapter"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "prometheus-operator"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "tempo-compactor"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "tempo-distributor"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "tempo-querier"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "Deployment"
+#         name       = "tempo-query-frontend"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "loki-loki-distributed-ingester"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "loki-loki-distributed-querier"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-alertmanager"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-compactor"
+#       },
+#     ],
+#     (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+#     ? [
+#       for zone in ["a", "b", "c"] :
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-ingester-zone-${zone}"
+#       }
+#     ]
+#     : [
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-ingester"
+#       },
+#     ],
+#     (var.mimir_zone_aware_replication == null || var.mimir_zone_aware_replication == true)
+#     ? [
+#       for zone in ["a", "b", "c"] :
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-store-gateway-zone-${zone}"
+#       }
+#     ]
+#     : [
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "mimir-store-gateway"
+#       },
+#     ],
+#     [
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "tempo-ingester"
+#       },
+#       {
+#         apiVersion = "apps/v1"
+#         kind       = "StatefulSet"
+#         name       = "tempo-memcached"
+#       },
+#       {
+#         apiVersion = "batch/v1"
+#         kind       = "Job"
+#         name       = "mimir-make-minio-buckets-5.3.0"
+#       },
+#       {
+#         apiVersion = "monitoring.coreos.com/v1"
+#         kind       = "Alertmanager"
+#         name       = "main"
+#       },
+#       {
+#         apiVersion = "monitoring.coreos.com/v1"
+#         kind       = "Prometheus"
+#         name       = "k8s"
+#       }
+#     ]
+#   )
+# }
 
 # resource "kubernetes_manifest" "vpas" {
 #   for_each = {
