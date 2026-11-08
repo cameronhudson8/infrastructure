@@ -18,7 +18,11 @@ resource "kubernetes_manifest" "node_class_main" {
     }
     spec = {
       imageSelectorTerms = [
-        { alias = "ContainerOptimizedOS@latest" },
+        # Use the Container-Optimized OS image that matches the cluster's GKE release channel.
+        {
+          channel = "cluster"
+          family  = "ContainerOptimizedOS"
+        },
       ]
       serviceAccount = data.google_service_account.nodes.email
     }

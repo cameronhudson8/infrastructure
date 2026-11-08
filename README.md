@@ -42,6 +42,9 @@ Terraform code for creating cloud infrastructure where applications are deployed
     1. `kubernetes`
     1. In-cluster content
         * `default-network-policies`
+        * Observability
+            1. `monitoring-crds`
+            1. `monitoring`
         * `karpenter-operator`
         * `karpenter-node-pools`
         * (TODO) `vpn`
@@ -49,9 +52,6 @@ Terraform code for creating cloud infrastructure where applications are deployed
         * (TODO) `ci-cd`
         * (TODO) `identity`
         * (TODO) `secrets`
-        * Observability
-            1. `monitoring-crds`
-            1. `monitoring`
 
 ## Cleanup
 

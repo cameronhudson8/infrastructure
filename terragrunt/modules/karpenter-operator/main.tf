@@ -1,4 +1,7 @@
 locals {
+  # The region containing the cluster, whether the cluster is zonal (e.g. us-central1-a) or regional (e.g. us-central1).
+  cluster_region                  = regex("^[a-z]+-[a-z]+[0-9]+", var.cluster_location)
+  controller_role                 = yamldecode(data.http.karpenter_controller_role.response_body)
   google_service_account_name     = "karpenter"
   kubernetes_service_account_name = "karpenter"
   namespace                       = "karpenter"
@@ -11,14 +14,40 @@ resource "google_service_account" "karpenter" {
 
 data "google_project" "current" {}
 
+data "google_service_account" "nodes" {
+  account_id = var.node_service_account_name
+}
+
+# The minimal set of permissions required by the Karpenter controller, as published for this version of Karpenter.
+data "http" "karpenter_controller_role" {
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to download the Karpenter controller IAM role (HTTP ${self.status_code}) from ${self.url}."
+    }
+  }
+  url = "https://raw.githubusercontent.com/cloudpilot-ai/karpenter-provider-gcp/v${var.karpenter_version}/deploy/iam/karpenter-controller-role.yaml"
+}
+
+resource "google_project_iam_custom_role" "karpenter_controller" {
+  description = local.controller_role.description
+  permissions = local.controller_role.includedPermissions
+  project     = data.google_project.current.project_id
+  role_id     = "karpenter_controller"
+  title       = local.controller_role.title
+}
+
 resource "google_project_iam_member" "karpenter" {
-  for_each = toset([
-    "roles/compute.admin",
-    "roles/container.admin",
-  ])
   member  = "serviceAccount:${google_service_account.karpenter.email}"
-  project = data.google_project.current.id
-  role    = each.value
+  project = data.google_project.current.project_id
+  role    = google_project_iam_custom_role.karpenter_controller.id
+}
+
+# Allow the Karpenter controller to attach the node service account (and only that one) to the VMs it creates.
+resource "google_service_account_iam_member" "karpenter_act_as_nodes" {
+  member             = "serviceAccount:${google_service_account.karpenter.email}"
+  role               = "roles/iam.serviceAccountUser"
+  service_account_id = data.google_service_account.nodes.name
 }
 
 resource "google_service_account_iam_member" "karpenter" {
@@ -122,24 +151,24 @@ resource "kubernetes_network_policy_v1" "karpenter_egress_to_node_metadata" {
 
 resource "kubernetes_manifest" "fqdn_network_policy_karpenter_egress_to_google_apis" {
   manifest = {
-    "apiVersion" = "networking.gke.io/v1alpha1"
-    "kind"       = "FQDNNetworkPolicy"
-    "metadata" = {
-      "name"      = "karpenter"
-      "namespace" = "karpenter"
+    apiVersion = "networking.gke.io/v1alpha1"
+    kind       = "FQDNNetworkPolicy"
+    metadata = {
+      name      = "karpenter"
+      namespace = "karpenter"
     }
-    "spec" = {
-      "egress" = [{
-        "matches" = [
-          { "name" = "gcloud-compute.com" },
-          { "pattern" = "*.googleapis.com" },
+    spec = {
+      egress = [{
+        matches = [
+          { name = "gcloud-compute.com" },
+          { pattern = "*.googleapis.com" },
         ]
-        "ports" = [{
-          "port"     = 443
-          "protocol" = "TCP"
+        ports = [{
+          port     = 443
+          protocol = "TCP"
         }]
       }]
-      "podSelector" = {}
+      podSelector = {}
     }
   }
 }
@@ -154,18 +183,22 @@ data "helm_template" "karpenter" {
   skip_crds        = false
   values = [
     yamlencode({
-      "controller" = {
-        "settings" = {
-          "clusterName"     = var.cluster_name
-          "clusterLocation" = var.cluster_location
-          "projectID"       = data.google_project.current.project_id
+      controller = {
+        settings = {
+          # Despite its name, clusterLocation is the region used for instance type discovery.
+          clusterLocation               = local.cluster_region
+          clusterName                   = var.cluster_name
+          defaultNodepoolServiceAccount = data.google_service_account.nodes.email
+          # The exact location of the cluster (a zone, for zonal clusters), used for GKE API calls.
+          nodeLocation = var.cluster_location
+          projectID    = data.google_project.current.project_id
         }
       }
-      "credentials" = {
-        "enabled" = false
+      credentials = {
+        enabled = false
       }
-      "serviceAccount" = {
-        "annotations" = {
+      serviceAccount = {
+        annotations = {
           "iam.gke.io/gcp-service-account" = "${local.google_service_account_name}@${data.google_project.current.project_id}.iam.gserviceaccount.com"
         }
       }
@@ -195,6 +228,7 @@ resource "helm_release" "karpenter" {
   depends_on = [
     google_project_iam_member.karpenter,
     google_service_account_iam_member.karpenter,
+    google_service_account_iam_member.karpenter_act_as_nodes,
     kubernetes_manifest.fqdn_network_policy_karpenter_egress_to_google_apis,
     kubernetes_manifest.karpenter_crds,
     kubernetes_network_policy_v1.karpenter_egress_to_control_plane,

@@ -37,14 +37,10 @@ resource "google_container_cluster" "main" {
   enable_cilium_clusterwide_network_policy = true
   enable_fqdn_network_policy               = true
   enable_l4_ilb_subsetting                 = true
-  initial_node_count                       = 1
   ip_allocation_policy {
     cluster_secondary_range_name  = var.kubernetes_pods_subnet_secondary_range_name
     services_secondary_range_name = var.kubernetes_services_subnet_secondary_range_name
     stack_type                    = "IPV4_IPV6"
-  }
-  lifecycle {
-    ignore_changes = [node_config]
   }
   location = var.kubernetes_cluster_location
   master_authorized_networks_config {
@@ -63,12 +59,6 @@ resource "google_container_cluster" "main" {
   name            = var.kubernetes_cluster_name
   network         = var.vpc_name
   networking_mode = "VPC_NATIVE"
-  node_config {
-    service_account = google_service_account.nodes.email
-    workload_metadata_config {
-      mode = "GKE_METADATA"
-    }
-  }
   private_cluster_config {
     # This property is incorrectly named; if true, it *disables* the public
     # endpoint. If false, then both the public and private endpoints are
@@ -84,8 +74,7 @@ resource "google_container_cluster" "main" {
   # Setting stack_type IPV4_IPV6 is not supported when private ipv6 google
   # access is enabled."
   # private_ipv6_google_access = "PRIVATE_IPV6_GOOGLE_ACCESS_BIDIRECTIONAL"
-  remove_default_node_pool = true
-  subnetwork               = var.kubernetes_cluster_subnet_name
+  subnetwork = var.kubernetes_cluster_subnet_name
   workload_identity_config {
     workload_pool = "${var.gcp_project_id}.svc.id.goog"
   }

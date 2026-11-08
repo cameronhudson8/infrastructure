@@ -1,4 +1,4 @@
-resource "kubernetes_namespace" "ingress_nginx" {
+resource "kubernetes_namespace_v1" "ingress_nginx" {
   metadata {
     name = "ingress-nginx"
   }
@@ -7,7 +7,7 @@ resource "kubernetes_namespace" "ingress_nginx" {
 resource "helm_release" "ingress_nginx" {
   chart      = "ingress-nginx"
   name       = "ingress-nginx"
-  namespace  = kubernetes_namespace.ingress_nginx.metadata[0].name
+  namespace  = kubernetes_namespace_v1.ingress_nginx.metadata[0].name
   repository = "https://kubernetes.github.io/ingress-nginx"
   values = [
     yamlencode({
@@ -95,7 +95,7 @@ resource "kubernetes_manifest" "service_monitor" {
     kind       = "ServiceMonitor"
     metadata = {
       name      = "ingress-nginx"
-      namespace = kubernetes_namespace.ingress_nginx.metadata[0].name
+      namespace = kubernetes_namespace_v1.ingress_nginx.metadata[0].name
     }
     spec = {
       jobLabel = "ingress-nginx"

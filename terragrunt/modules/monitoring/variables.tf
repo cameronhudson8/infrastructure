@@ -39,8 +39,8 @@ variable "kube_prometheus_version" {
   type        = string
 }
 
-variable "loki_distributed_helm_chart_version" {
-  description = "The version of the loki-distributed helm chart to use"
+variable "loki_helm_chart_version" {
+  description = "The version of the loki helm chart to use"
   type        = string
 }
 
