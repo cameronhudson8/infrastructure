@@ -192,9 +192,11 @@ resource "kubernetes_daemonset" "fluentd" {
                 field_path = "spec.nodeName"
               }
             }
+
           }
-          image = "fluent/fluentd-kubernetes-daemonset:v${var.fluentd_version}-debian-forward-1"
-          name  = "fluentd"
+          image = "fluent/fluentd-kubernetes-daemonset:v${var.fluentd_version}-debian"
+          # image = "fluent/fluentd-kubernetes-daemonset:v${var.fluentd_version}-debian-forward-1"
+          name = "fluentd"
           resources {
             limits = {
               memory = "200Mi"

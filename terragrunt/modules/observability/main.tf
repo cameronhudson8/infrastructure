@@ -31,10 +31,10 @@ data "external" "kube_prometheus_prepare_manifests" {
           " \
           ./jsonnetfile.json
       )
-      if [ "$${installed_version}" != '${var.kube_prometheus_version}' ]; then
+      if [ "$${installed_version}" != 'v${var.kube_prometheus_version}' ]; then
         # Install the kube-prometheus dependency.
         # Creates `vendor/` and `jsonnetfile.lock.json`, and fills in `jsonnetfile.json`.
-        jb -q install "$${REPO}/$${SUBDIR}@${var.kube_prometheus_version}"
+        jb -q install "$${REPO}/$${SUBDIR}@v${var.kube_prometheus_version}"
       fi
 
       kube_prometheus_config_path="$(mktemp)"
@@ -257,7 +257,7 @@ data "external" "kube_prometheus_prepare_manifests" {
       manifests_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_PATH}" -regex '.*\.ya?ml') | md5 -q)
       manifests_setup_checksum=$(cat "$${kube_prometheus_config_path}" $(find -E "$${MANIFESTS_SETUP_PATH}" -regex '.*\.ya?ml') | md5 -q)
 
-      curl 'https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/${var.kube_prometheus_version}/build.sh' \
+      curl 'https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v${var.kube_prometheus_version}/build.sh' \
           --fail-with-body \
           -LsS \
           | sh -s "$${kube_prometheus_config_path}"
@@ -300,7 +300,7 @@ resource "kubernetes_manifest" "kube_prometheus_crds" {
 
 resource "kubernetes_namespace_v1" "observability" {
   metadata {
-    name = var.namespace_name
+    name = "observability"
   }
 }
 
@@ -563,205 +563,51 @@ resource "helm_release" "tempo" {
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
-      ingester = merge(
-        var.tempo_ingester_replicas == null ? {} : { replicas = var.tempo_ingester_replicas },
-      )
+      global = {
+        storageClass = "standard-rwo"
+      }
     })
   ]
   version = var.tempo_distributed_helm_chart_version
 }
 
-# Get the default Helm chart values, so we can create persistent volumes of
-# appropriate sizes.
-data "http" "mimir_distributed_helm_chart_default_values" {
-  url = "https://raw.githubusercontent.com/grafana/mimir/refs/tags/mimir-distributed-${var.mimir_distributed_helm_chart_version}/operations/helm/charts/mimir-distributed/values.yaml"
-}
-
-locals {
-  mimir_distributed_helm_chart_default_values = yamldecode(data.http.mimir_distributed_helm_chart_default_values.response_body)
-  mimir = {
-    ingester_zone_aware_replication_enabled = (
-      var.mimir_zone_aware_replication != null
-      ? var.mimir_zone_aware_replication
-      : local.mimir_distributed_helm_chart_default_values.ingester.zoneAwareReplication.enabled
-    )
-    store_gateway_zone_aware_replication_enabled = (
-      var.mimir_zone_aware_replication != null
-      ? var.mimir_zone_aware_replication
-      : local.mimir_distributed_helm_chart_default_values.store_gateway.zoneAwareReplication.enabled
-    )
-  }
-  mimir_volumes = concat(
-    [
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
-        host_path        = "/mnt/mimir-minio"
-        pv_name          = "mimir-minio"
-        pvc_name         = "mimir-minio"
-      },
-    ],
-    [
-      for replica in range(local.mimir_distributed_helm_chart_default_values.alertmanager.replicas) :
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-alertmanager-${replica}"
-        pv_name          = "storage-mimir-alertmanager-${replica}"
-        pvc_name         = "storage-mimir-alertmanager-${replica}"
-      }
-    ],
-    [
-      for replica in range(local.mimir_distributed_helm_chart_default_values.compactor.replicas) :
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-compactor-${replica}"
-        pv_name          = "storage-mimir-compactor-${replica}"
-        pvc_name         = "storage-mimir-compactor-${replica}"
-      }
-    ],
-    local.mimir.ingester_zone_aware_replication_enabled
-    ? flatten([
-      for zone in local.mimir_distributed_helm_chart_default_values.ingester.zoneAwareReplication.zones :
-      [
-        for replica in range(ceil(var.mimir_ingester_replicas != null ? var.mimir_ingester_replicas : local.mimir_distributed_helm_chart_default_values.ingester.replicas) / 3) :
-        {
-          default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-          host_path        = "/mnt/storage-mimir-ingester-${zone.name}-${replica}"
-          pv_name          = "storage-mimir-ingester-${zone.name}-${replica}"
-          pvc_name         = "storage-mimir-ingester-${zone.name}-${replica}"
-        }
-      ]
-    ])
-    : [
-      for replica in range(var.mimir_ingester_replicas != null ? var.mimir_ingester_replicas : local.mimir_distributed_helm_chart_default_values.ingester.replicas) :
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-ingester-${replica}"
-        pv_name          = "storage-mimir-ingester-${replica}"
-        pvc_name         = "storage-mimir-ingester-${replica}"
-      }
-    ],
-    local.mimir.store_gateway_zone_aware_replication_enabled
-    ? [
-      for zone in local.mimir_distributed_helm_chart_default_values.store_gateway.zoneAwareReplication.zones :
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-store-gateway-${zone.name}-0"
-        pv_name          = "storage-mimir-store-gateway-${zone.name}-0"
-        pvc_name         = "storage-mimir-store-gateway-${zone.name}-0"
-      }
-    ]
-    : [
-      {
-        default_capacity = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
-        host_path        = "/mnt/storage-mimir-store-gateway-0"
-        pv_name          = "storage-mimir-store-gateway-0"
-        pvc_name         = "storage-mimir-store-gateway-0"
-      },
-    ],
-  )
-}
-
-resource "terraform_data" "host_paths" {
-  for_each = {
-    for volume in local.mimir_volumes : volume.pvc_name => volume
-  }
-  input = {
-    host_path = each.value.host_path
-    vm_name   = var.vm_name
-  }
-  provisioner "local-exec" {
-    command = "limactl shell ${self.input.vm_name} sudo mkdir -p ${self.input.host_path}"
-    when    = create
-  }
-  provisioner "local-exec" {
-    command = "limactl shell ${self.input.vm_name} sudo rm -rf ${self.input.host_path}"
-    when    = destroy
-  }
-}
-
-resource "kubernetes_persistent_volume" "mimir_volumes" {
-  for_each = { for volume in local.mimir_volumes : volume.pvc_name => volume }
-  metadata {
-    name = each.value.pv_name
-  }
-  spec {
-    access_modes = [
-      "ReadWriteOnce",
-    ]
-    capacity = {
-      storage = each.value.default_capacity
-    }
-    claim_ref {
-      name      = each.value.pvc_name
-      namespace = kubernetes_namespace.monitoring.metadata[0].name
-    }
-    node_affinity {
-      required {
-        node_selector_term {
-          # Match any node
-          match_expressions {
-            key      = "kubernetes.io/hostname"
-            operator = "Exists"
-          }
-        }
-      }
-    }
-    persistent_volume_source {
-      local {
-        path = each.value.host_path
-      }
-    }
-    storage_class_name = var.storage_class_name
-  }
-}
-
 resource "helm_release" "mimir" {
-  depends_on = [terraform_data.host_paths]
   chart      = "mimir-distributed"
   name       = "mimir"
   namespace  = kubernetes_namespace_v1.observability.metadata[0].name
   repository = "https://grafana.github.io/helm-charts"
   values = [
     yamlencode({
-      minio = {
-        persistence = {
-          size = local.mimir_distributed_helm_chart_default_values.minio.persistence.size
-        }
-      }
       alertmanager = {
         persistentVolume = {
-          size = local.mimir_distributed_helm_chart_default_values.alertmanager.persistentVolume.size
+          storageClass = "standard-rwo"
         }
       }
       compactor = {
         persistentVolume = {
-          size = local.mimir_distributed_helm_chart_default_values.compactor.persistentVolume.size
+          storageClass = "standard-rwo"
         }
       }
-      ingester = merge(
-        {
-          persistentVolume = {
-            size = local.mimir_distributed_helm_chart_default_values.ingester.persistentVolume.size
-          }
-          zoneAwareReplication = merge(
-            var.mimir_zone_aware_replication == null ? {} : { enabled = var.mimir_zone_aware_replication },
-          )
-        },
-        var.mimir_ingester_replicas == null ? {} : { replicas = var.mimir_ingester_replicas },
-      )
-      querier = merge(
-        var.mimir_querier_replicas == null ? {} : { replicas = var.mimir_querier_replicas },
-      )
-      query_scheduler = merge(
-        var.mimir_query_scheduler_replicas == null ? {} : { replicas = var.mimir_query_scheduler_replicas }
-      )
+      ingester = {
+        persistentVolume = {
+          storageClass = "standard-rwo"
+        }
+        zoneAwareReplication = {
+          enabled = true
+        }
+      }
+      minio = {
+        persistence = {
+          storageClass = "standard-rwo"
+        }
+      }
       store_gateway = {
         persistentVolume = {
-          size = local.mimir_distributed_helm_chart_default_values.store_gateway.persistentVolume.size
+          storageClass = "standard-rwo"
         }
-        zoneAwareReplication = merge(
-          var.mimir_zone_aware_replication == null ? {} : { enabled = var.mimir_zone_aware_replication },
-        )
+        zoneAwareReplication = {
+          enabled = true
+        }
       }
     })
   ]
@@ -862,6 +708,10 @@ resource "helm_release" "grafana" {
       env = {
         TZ = "America/Los_Angeles"
       }
+      persistence = {
+        enabled          = true
+        storageClassName = "standard-rwo"
+      }
     })
   ]
   version = var.grafana_helm_chart_version
@@ -883,7 +733,7 @@ module "fluentd" {
 # # TODO: Automate this somehow. Maybe the dependencies have a feature that deploys VPAs.
 # #     kubectl get pod \
 # #         --context local \
-# #         --namespace monitoring \
+# #         --namespace observability \
 # #         --output yaml \
 # #     | yq \
 # #         --exit-status \

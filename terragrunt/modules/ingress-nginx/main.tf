@@ -31,9 +31,7 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
     name = "monitoring-ingress-nginx"
   }
   rule {
-    api_groups = [
-      "",
-    ]
+    api_groups = [""]
     resources = [
       "endpoints",
       "pods",
@@ -46,12 +44,8 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
     ]
   }
   rule {
-    api_groups = [
-      "extensions",
-    ]
-    resources = [
-      "ingresses",
-    ]
+    api_groups = ["extensions"]
+    resources  = ["ingresses"]
     verbs = [
       "get",
       "list",
@@ -59,12 +53,8 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
     ]
   }
   rule {
-    api_groups = [
-      "networking.k8s.io",
-    ]
-    resources = [
-      "ingresses",
-    ]
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingresses"]
     verbs = [
       "get",
       "list",
@@ -85,7 +75,7 @@ resource "kubernetes_cluster_role_binding" "prometheus_monitoring_ingress_nginx"
   subject {
     kind      = "ServiceAccount"
     name      = "prometheus-k8s"
-    namespace = "monitoring"
+    namespace = "observability"
   }
 }
 
