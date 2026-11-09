@@ -1,112 +1,242 @@
+locals {
+  # The region containing the cluster, whether the cluster is zonal (e.g. us-central1-a) or regional (e.g. us-central1).
+  cluster_region                  = regex("^[a-z]+-[a-z]+[0-9]+", var.cluster_location)
+  controller_role                 = yamldecode(data.http.karpenter_controller_role.response_body)
+  google_service_account_name     = "karpenter"
+  kubernetes_service_account_name = "karpenter"
+  namespace                       = "karpenter"
+}
+
 resource "google_service_account" "karpenter" {
-  account_id = "karpenter"
+  account_id   = local.google_service_account_name
+  display_name = "Karpenter"
 }
 
 data "google_project" "current" {}
 
-resource "google_project_iam_member" "karpenter_gcp_service_account" {
-  for_each = toset([
-    "roles/compute.admin",
-    "roles/container.admin",
-  ])
-  member  = "serviceAccount:${google_service_account.karpenter.email}"
-  project = data.google_project.current.id
-  role    = each.value
+data "google_service_account" "nodes" {
+  account_id = var.node_service_account_name
 }
 
-# Allow Karpenter to provision Kubernetes nodes that run as a different GCP
-# service account (the GKE node service account).
-resource "google_service_account_iam_member" "karpenter" {
+# The minimal set of permissions required by the Karpenter controller, as published for this version of Karpenter.
+data "http" "karpenter_controller_role" {
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "Failed to download the Karpenter controller IAM role (HTTP ${self.status_code}) from ${self.url}."
+    }
+  }
+  url = "https://raw.githubusercontent.com/cloudpilot-ai/karpenter-provider-gcp/v${var.karpenter_version}/deploy/iam/karpenter-controller-role.yaml"
+}
+
+resource "google_project_iam_custom_role" "karpenter_controller" {
+  description = local.controller_role.description
+  permissions = local.controller_role.includedPermissions
+  project     = data.google_project.current.project_id
+  role_id     = "karpenter_controller"
+  title       = local.controller_role.title
+}
+
+resource "google_project_iam_member" "karpenter" {
+  member  = "serviceAccount:${google_service_account.karpenter.email}"
+  project = data.google_project.current.project_id
+  role    = google_project_iam_custom_role.karpenter_controller.id
+}
+
+# Allow the Karpenter controller to attach the node service account (and only that one) to the VMs it creates.
+resource "google_service_account_iam_member" "karpenter_act_as_nodes" {
   member             = "serviceAccount:${google_service_account.karpenter.email}"
   role               = "roles/iam.serviceAccountUser"
-  service_account_id = var.node_service_account_name
+  service_account_id = data.google_service_account.nodes.name
 }
 
-# This does not handle the case in which the clone directory already exists,
-# but with contents from an older git tag.
-data "external" "karpenter_helm_chart" {
-  program = [
-    "/usr/bin/env",
-    "bash",
-    "-eu",
-    "-o",
-    "pipefail",
-    "-c",
-    <<-BASH
-      QUERY=$(cat /dev/stdin)
-      echo "\$${QUERY} = $${QUERY}" >&2
+resource "google_service_account_iam_member" "karpenter" {
+  member             = "serviceAccount:${data.google_project.current.project_id}.svc.id.goog[${local.namespace}/${local.kubernetes_service_account_name}]"
+  role               = "roles/iam.workloadIdentityUser"
+  service_account_id = google_service_account.karpenter.name
+}
 
-      karpenter_version=$(jq -er '.karpenterVersion' <<<"$${QUERY}")
-      echo "\$${karpenter_version} = $${karpenter_version}" >&2
-
-      git_clone_dir="/tmp/repos/karpenter/refs/$${karpenter_version}"
-      if [ -d "$${git_clone_dir}" ]; then
-        (
-          cd "$${git_clone_dir}"
-          git fetch --all --quiet
-          git reset \
-              --hard "$${karpenter_version}"\
-              --quiet
-        )
-      else
-          mkdir -p "$${git_clone_dir}"
-          git clone git@github.com:cloudpilot-ai/karpenter-provider-gcp.git "$${git_clone_dir}" \
-              --branch "$${karpenter_version}" \
-              --depth 1 \
-              --quiet
-      fi
-      echo "{\"karpenterRepoPath\":\"$${git_clone_dir}\"}"
-    BASH
-  ]
-  query = {
-    "karpenterVersion" = var.karpenter_version
+resource "kubernetes_namespace_v1" "karpenter" {
+  metadata {
+    name = local.namespace
   }
 }
 
-resource "kubernetes_manifest" "karpenter_crds" {
-  for_each = toset(fileset("${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter/crds", "*.y*ml"))
-  manifest = yamldecode(file("${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter/crds/${each.value}"))
+data "kubernetes_endpoints_v1" "kubernetes" {
+  metadata {
+    name      = "kubernetes"
+    namespace = "default"
+  }
 }
 
-locals {
-  namespace                = "karpenter"
-  k8s_service_account_name = "karpenter"
+resource "kubernetes_network_policy_v1" "karpenter_egress_to_control_plane" {
+  metadata {
+    name      = "karpenter-egress-to-kubernetes"
+    namespace = kubernetes_namespace_v1.karpenter.metadata[0].name
+  }
+  spec {
+    egress {
+      ports {
+        port     = 443
+        protocol = "TCP"
+      }
+      to {
+        dynamic "ip_block" {
+          for_each = flatten([
+            for subset in data.kubernetes_endpoints_v1.kubernetes.subset : [
+              for address in subset.address : address.ip
+            ]
+          ])
+          content {
+            cidr = "${ip_block.value}/32"
+          }
+        }
+      }
+    }
+    egress {
+      ports {
+        port     = 80
+        protocol = "TCP"
+      }
+      to {
+        ip_block {
+          cidr = "169.254.169.254/32"
+        }
+      }
+    }
+    pod_selector {}
+    policy_types = ["Egress"]
+  }
 }
 
-resource "google_project_iam_member" "karpenter_k8s_service_account" {
-  member  = "serviceAccount:${data.google_project.current.project_id}.svc.id.goog[${local.namespace}/${local.k8s_service_account_name}]"
-  project = data.google_project.current.id
-  role    = "roles/iam.workloadIdentityUser"
+resource "kubernetes_network_policy_v1" "karpenter_egress_to_node_metadata" {
+  metadata {
+    name      = "karpenter-egress-to-node-metadata"
+    namespace = kubernetes_namespace_v1.karpenter.metadata[0].name
+  }
+  spec {
+    egress {
+      ports {
+        port     = 443
+        protocol = "TCP"
+      }
+      to {
+        dynamic "ip_block" {
+          for_each = flatten([
+            for subset in data.kubernetes_endpoints_v1.kubernetes.subset : [
+              for address in subset.address : address.ip
+            ]
+          ])
+          content {
+            cidr = "${ip_block.value}/32"
+          }
+        }
+      }
+    }
+    egress {
+      ports {
+        port     = 80
+        protocol = "TCP"
+      }
+      to {
+        ip_block {
+          cidr = "169.254.169.254/32"
+        }
+      }
+    }
+    pod_selector {}
+    policy_types = ["Egress"]
+  }
 }
 
-resource "helm_release" "karpenter" {
-  depends_on = [
-    google_project_iam_member.karpenter_k8s_service_account,
-    kubernetes_manifest.karpenter_crds,
-  ]
-  chart            = "${data.external.karpenter_helm_chart.result.karpenterRepoPath}/charts/karpenter"
-  create_namespace = true
+resource "kubernetes_manifest" "fqdn_network_policy_karpenter_egress_to_google_apis" {
+  manifest = {
+    apiVersion = "networking.gke.io/v1alpha1"
+    kind       = "FQDNNetworkPolicy"
+    metadata = {
+      name      = "karpenter"
+      namespace = "karpenter"
+    }
+    spec = {
+      egress = [{
+        matches = [
+          { name = "gcloud-compute.com" },
+          { pattern = "*.googleapis.com" },
+        ]
+        ports = [{
+          port     = 443
+          protocol = "TCP"
+        }]
+      }]
+      podSelector = {}
+    }
+  }
+}
+
+data "helm_template" "karpenter" {
+  chart            = "karpenter"
+  create_namespace = false
+  kube_version     = var.kubernetes_version
   name             = "karpenter"
   namespace        = local.namespace
-  skip_crds        = true
+  repository       = "https://cloudpilot-ai.github.io/karpenter-provider-gcp"
+  skip_crds        = false
   values = [
     yamlencode({
-      "controller" = {
-        "settings" = {
-          "clusterName" = var.cluster_name
-          "location"    = var.cluster_location
-          "projectID"   = data.google_project.current.project_id
+      controller = {
+        settings = {
+          # Despite its name, clusterLocation is the region used for instance type discovery.
+          clusterLocation               = local.cluster_region
+          clusterName                   = var.cluster_name
+          defaultNodepoolServiceAccount = data.google_service_account.nodes.email
+          # The exact location of the cluster (a zone, for zonal clusters), used for GKE API calls.
+          nodeLocation = var.cluster_location
+          projectID    = data.google_project.current.project_id
         }
       }
-      "credentials" = {
-        "enabled" = false
+      credentials = {
+        enabled = false
       }
-      "serviceAccount" = {
-        "annotations" = {
-          "iam.gke.io/gcp-service-account" = google_service_account.karpenter.email
+      serviceAccount = {
+        annotations = {
+          "iam.gke.io/gcp-service-account" = "${local.google_service_account_name}@${data.google_project.current.project_id}.iam.gserviceaccount.com"
         }
-        "name" = local.k8s_service_account_name
       }
     }),
   ]
+  version = "v${var.karpenter_version}"
+}
+
+resource "kubernetes_manifest" "karpenter_crds" {
+  for_each = {
+    for crd in [
+      for crd_string in data.helm_template.karpenter.crds : yamldecode(crd_string)
+    ] :
+    join(",", [
+      "apiVersion=${crd.apiVersion}",
+      "kind=${crd.kind}",
+      "name=${crd.metadata.name}",
+    ]) => crd
+  }
+  manifest = each.value
+}
+
+resource "helm_release" "karpenter" {
+  atomic           = true
+  chart            = data.helm_template.karpenter.chart
+  create_namespace = data.helm_template.karpenter.create_namespace
+  depends_on = [
+    google_project_iam_member.karpenter,
+    google_service_account_iam_member.karpenter,
+    google_service_account_iam_member.karpenter_act_as_nodes,
+    kubernetes_manifest.fqdn_network_policy_karpenter_egress_to_google_apis,
+    kubernetes_manifest.karpenter_crds,
+    kubernetes_network_policy_v1.karpenter_egress_to_control_plane,
+    kubernetes_network_policy_v1.karpenter_egress_to_node_metadata,
+  ]
+  name       = data.helm_template.karpenter.name
+  namespace  = data.helm_template.karpenter.namespace
+  repository = data.helm_template.karpenter.repository
+  skip_crds  = true
+  values     = data.helm_template.karpenter.values
 }

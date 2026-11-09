@@ -1,5 +1,5 @@
 # Inspired by https://medium.com/@Oskarr3/feeding-loki-with-fluentd-4e9647d23ab9
-resource "kubernetes_config_map" "fluentd" {
+resource "kubernetes_config_map_v1" "fluentd" {
   metadata {
     labels = {
       app     = "fluentd"
@@ -108,14 +108,14 @@ resource "kubernetes_config_map" "fluentd" {
   }
 }
 
-resource "kubernetes_service_account" "fluentd" {
+resource "kubernetes_service_account_v1" "fluentd" {
   metadata {
     name      = "fluentd"
     namespace = var.namespace_name
   }
 }
 
-resource "kubernetes_cluster_role" "fluentd" {
+resource "kubernetes_cluster_role_v1" "fluentd" {
   metadata {
     name = "fluentd"
   }
@@ -133,14 +133,14 @@ resource "kubernetes_cluster_role" "fluentd" {
   }
 }
 
-resource "kubernetes_cluster_role_binding" "fluentd" {
+resource "kubernetes_cluster_role_binding_v1" "fluentd" {
   metadata {
     name = "fluentd"
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = kubernetes_cluster_role.fluentd.metadata[0].name
+    name      = kubernetes_cluster_role_v1.fluentd.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"
@@ -150,7 +150,7 @@ resource "kubernetes_cluster_role_binding" "fluentd" {
 }
 
 # Based on https://github.com/fluent/fluentd-kubernetes-daemonset/blob/master/fluentd-daemonset-forward.yaml
-resource "kubernetes_daemonset" "fluentd" {
+resource "kubernetes_daemon_set_v1" "fluentd" {
   metadata {
     labels = {
       app     = "fluentd"
@@ -193,8 +193,9 @@ resource "kubernetes_daemonset" "fluentd" {
               }
             }
           }
-          image = "fluent/fluentd-kubernetes-daemonset:v${var.fluentd_version}-debian-forward-1"
-          name  = "fluentd"
+          image = "docker.io/library/fluentd:v${var.fluentd_version}-debian-1"
+          # image = "fluent/fluentd-kubernetes-daemonset:v${var.fluentd_version}-debian-forward-1"
+          name = "fluentd"
           resources {
             limits = {
               memory = "200Mi"
@@ -220,7 +221,7 @@ resource "kubernetes_daemonset" "fluentd" {
             read_only  = true
           }
         }
-        service_account_name             = kubernetes_service_account.fluentd.metadata[0].name
+        service_account_name             = kubernetes_service_account_v1.fluentd.metadata[0].name
         termination_grace_period_seconds = 30
         toleration {
           key    = "node-role.kubernetes.io/control-plane"
@@ -232,7 +233,7 @@ resource "kubernetes_daemonset" "fluentd" {
         }
         volume {
           config_map {
-            name = kubernetes_config_map.fluentd.metadata[0].name
+            name = kubernetes_config_map_v1.fluentd.metadata[0].name
           }
           name = "config"
         }
@@ -253,35 +254,35 @@ resource "kubernetes_daemonset" "fluentd" {
   }
 }
 
-resource "kubernetes_manifest" "vpa" {
-  manifest = {
-    apiVersion = "autoscaling.k8s.io/v1"
-    kind       = "VerticalPodAutoscaler"
-    metadata = {
-      namespace = var.namespace_name
-      name      = "fluentd"
-    }
-    spec = {
-      targetRef = {
-        apiVersion = "apps/v1"
-        kind       = "DaemonSet"
-        name       = kubernetes_daemonset.fluentd.metadata[0].name
-      }
-      updatePolicy = {
-        updateMode = "Off"
-      }
-    }
-  }
-}
+# resource "kubernetes_manifest" "vpa" {
+#   manifest = {
+#     apiVersion = "autoscaling.k8s.io/v1"
+#     kind       = "VerticalPodAutoscaler"
+#     metadata = {
+#       namespace = var.namespace_name
+#       name      = "fluentd"
+#     }
+#     spec = {
+#       targetRef = {
+#         apiVersion = "apps/v1"
+#         kind       = "DaemonSet"
+#         name       = kubernetes_daemon_set_v1.fluentd.metadata[0].name
+#       }
+#       updatePolicy = {
+#         updateMode = "Off"
+#       }
+#     }
+#   }
+# }
 
-resource "kubernetes_network_policy" "fluentd_egress_to_loki" {
+resource "kubernetes_network_policy_v1" "fluentd_egress_to_loki" {
   metadata {
     name      = "fluentd-egress-to-loki"
     namespace = var.namespace_name
   }
   spec {
     pod_selector {
-      match_labels = kubernetes_daemonset.fluentd.metadata[0].labels
+      match_labels = kubernetes_daemon_set_v1.fluentd.metadata[0].labels
     }
     policy_types = [
       "Egress"
@@ -308,7 +309,7 @@ resource "kubernetes_network_policy" "fluentd_egress_to_loki" {
   }
 }
 
-resource "kubernetes_network_policy" "loki_ingress_from_fluentd" {
+resource "kubernetes_network_policy_v1" "loki_ingress_from_fluentd" {
   metadata {
     name      = "loki-ingress-from-fluentd"
     namespace = var.loki_distributor_namespace
@@ -331,7 +332,7 @@ resource "kubernetes_network_policy" "loki_ingress_from_fluentd" {
           }
         }
         pod_selector {
-          match_labels = kubernetes_daemonset.fluentd.metadata[0].labels
+          match_labels = kubernetes_daemon_set_v1.fluentd.metadata[0].labels
         }
       }
       ports {

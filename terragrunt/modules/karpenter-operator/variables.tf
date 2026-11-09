@@ -9,7 +9,12 @@ variable "cluster_name" {
 }
 
 variable "karpenter_version" {
-  description = "A git tag of https://github.com/cloudpilot-ai/karpenter-provider-gcp"
+  description = "The version of the Karpenter operator to apply"
+  type        = string
+}
+
+variable "kubernetes_version" {
+  description = "The version of the Kubernetes control plane"
   type        = string
 }
 

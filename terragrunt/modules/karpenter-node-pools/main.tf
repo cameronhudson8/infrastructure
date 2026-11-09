@@ -5,6 +5,10 @@ locals {
   }
 }
 
+data "google_service_account" "nodes" {
+  account_id = var.node_service_account_name
+}
+
 resource "kubernetes_manifest" "node_class_main" {
   manifest = {
     apiVersion = "${local.node_class_api_version.group}/${local.node_class_api_version.kind}"
@@ -14,8 +18,13 @@ resource "kubernetes_manifest" "node_class_main" {
     }
     spec = {
       imageSelectorTerms = [
-        { alias = "ContainerOptimizedOS@latest" },
+        # Use the Container-Optimized OS image that matches the cluster's GKE release channel.
+        {
+          channel = "cluster"
+          family  = "ContainerOptimizedOS"
+        },
       ]
+      serviceAccount = data.google_service_account.nodes.email
     }
   }
 }

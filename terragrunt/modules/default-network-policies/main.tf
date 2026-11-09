@@ -1,45 +1,52 @@
 # Based on https://docs.cilium.io/en/latest/network/servicemesh/default-deny-ingress-policy/
 resource "kubernetes_manifest" "cilium_network_poilicy_deny_by_default" {
   manifest = {
-    "apiVersion" = "cilium.io/v2"
-    "kind"       = "CiliumClusterwideNetworkPolicy"
-    "metadata" = {
-      "name" = "deny-ingress-and-egress"
+    apiVersion = "cilium.io/v2"
+    kind       = "CiliumClusterwideNetworkPolicy"
+    metadata = {
+      name = "deny-ingress-and-egress"
     }
-    "spec" = {
-      "description" = "Block all the traffic (except DNS) by default"
-      "egress" = [
+    spec = {
+      description = "Block all the traffic (except DNS) by default"
+      egress = [
         {
-          "toEndpoints" = [
+          toEndpoints = [
             {
-              "matchLabels" = {
+              matchLabels = {
                 "io.kubernetes.pod.namespace" = "kube-system"
-                "k8s-app"                     = "kube-dns"
+                k8s-app                       = "kube-dns"
+              }
+            },
+            # GKE redirects DNS queries to the node-local cache before they reach kube-dns.
+            {
+              matchLabels = {
+                "io.kubernetes.pod.namespace" = "kube-system"
+                k8s-app                       = "node-local-dns"
               }
             },
           ]
-          "toPorts" = [
+          toPorts = [
             {
-              "ports" = [
+              ports = [
                 {
-                  "port"     = 53
-                  "protocol" = "TCP"
+                  port     = 53
+                  protocol = "TCP"
                 },
                 {
-                  "port"     = 53
-                  "protocol" = "UDP"
+                  port     = 53
+                  protocol = "UDP"
                 },
               ]
             },
           ]
         },
       ]
-      "endpointSelector" = {
-        "matchExpressions" = [
+      endpointSelector = {
+        matchExpressions = [
           {
-            "key"      = "io.kubernetes.pod.namespace"
-            "operator" = "NotIn"
-            "values" = [
+            key      = "io.kubernetes.pod.namespace"
+            operator = "NotIn"
+            values = [
               "gke-managed-cim",
               "gke-managed-dpv2-observability",
               "gke-managed-system",
@@ -53,7 +60,7 @@ resource "kubernetes_manifest" "cilium_network_poilicy_deny_by_default" {
           }
         ]
       }
-      "ingress" = [{}]
+      ingress = [{}]
     }
   }
 }

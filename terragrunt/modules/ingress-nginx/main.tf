@@ -1,4 +1,4 @@
-resource "kubernetes_namespace" "ingress_nginx" {
+resource "kubernetes_namespace_v1" "ingress_nginx" {
   metadata {
     name = "ingress-nginx"
   }
@@ -7,7 +7,7 @@ resource "kubernetes_namespace" "ingress_nginx" {
 resource "helm_release" "ingress_nginx" {
   chart      = "ingress-nginx"
   name       = "ingress-nginx"
-  namespace  = kubernetes_namespace.ingress_nginx.metadata[0].name
+  namespace  = kubernetes_namespace_v1.ingress_nginx.metadata[0].name
   repository = "https://kubernetes.github.io/ingress-nginx"
   values = [
     yamlencode({
@@ -26,14 +26,12 @@ resource "helm_release" "ingress_nginx" {
 
 # Monitoring
 
-resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
+resource "kubernetes_cluster_role_v1" "monitoring_ingress_nginx" {
   metadata {
     name = "monitoring-ingress-nginx"
   }
   rule {
-    api_groups = [
-      "",
-    ]
+    api_groups = [""]
     resources = [
       "endpoints",
       "pods",
@@ -46,12 +44,8 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
     ]
   }
   rule {
-    api_groups = [
-      "extensions",
-    ]
-    resources = [
-      "ingresses",
-    ]
+    api_groups = ["extensions"]
+    resources  = ["ingresses"]
     verbs = [
       "get",
       "list",
@@ -59,12 +53,8 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
     ]
   }
   rule {
-    api_groups = [
-      "networking.k8s.io",
-    ]
-    resources = [
-      "ingresses",
-    ]
+    api_groups = ["networking.k8s.io"]
+    resources  = ["ingresses"]
     verbs = [
       "get",
       "list",
@@ -73,19 +63,19 @@ resource "kubernetes_cluster_role" "monitoring_ingress_nginx" {
   }
 }
 
-resource "kubernetes_cluster_role_binding" "prometheus_monitoring_ingress_nginx" {
+resource "kubernetes_cluster_role_binding_v1" "prometheus_monitoring_ingress_nginx" {
   metadata {
     name = "prometheus-monitoring-ingress-nginx"
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "monitoring-ingress-nginx"
+    name      = kubernetes_cluster_role_v1.monitoring_ingress_nginx.metadata[0].name
   }
   subject {
     kind      = "ServiceAccount"
     name      = "prometheus-k8s"
-    namespace = "monitoring"
+    namespace = "observability"
   }
 }
 
@@ -95,7 +85,7 @@ resource "kubernetes_manifest" "service_monitor" {
     kind       = "ServiceMonitor"
     metadata = {
       name      = "ingress-nginx"
-      namespace = kubernetes_namespace.ingress_nginx.metadata[0].name
+      namespace = kubernetes_namespace_v1.ingress_nginx.metadata[0].name
     }
     spec = {
       jobLabel = "ingress-nginx"

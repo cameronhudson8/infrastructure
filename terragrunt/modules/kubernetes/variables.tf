@@ -8,6 +8,11 @@ variable "gcp_project_id" {
   type        = string
 }
 
+variable "gcp_project_owner_email" {
+  description = "The email address of the GCP project owner"
+  type        = string
+}
+
 variable "kubernetes_cluster_location" {
   description = "The location (region or zone) of the Kubernetes cluster's control plane"
   type        = string

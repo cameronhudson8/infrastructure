@@ -13,11 +13,11 @@ generate "terraform" {
       required_providers {
         google = {
           source  = "hashicorp/google"
-          version = "~> 7.0"
+          version = "~> 8.0"
         }
         kubernetes = {
           source  = "hashicorp/kubernetes"
-          version = "~> 2.0"
+          version = "~> 3.0"
         }
       }
       required_version = "~> 1.0"
@@ -48,7 +48,8 @@ generate "providers" {
 generate "main" {
   contents  = <<-EOF
     module "karpenter_node_pools" {
-      source = "${find_in_parent_folders("modules")}/karpenter-node-pools"
+      node_service_account_name = ${jsonencode(dependency.kubernetes.outputs.node_service_account_name)}
+      source                    = "${find_in_parent_folders("modules")}/karpenter-node-pools"
     }
   EOF
   if_exists = "overwrite_terragrunt"
